@@ -9,8 +9,8 @@
 
 	<xs:simpleType name="name">
 		<xs:annotation>
-			<xs:documentation>A valid name for a port or activity in a Taverna
-				workflow.
+			<xs:documentation>
+				A valid name for a port or activity in a Taverna workflow.
 			</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
@@ -35,8 +35,7 @@
 	<xs:simpleType name="basicAnnotations">
 		<xs:annotation>
 			<xs:documentation>
-				The basic annotations available in a Taverna
-				workflow.
+				The basic annotations available in a Taverna workflow.
 			</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
@@ -150,61 +149,74 @@
 		<xs:attribute name="type" type="xs:string" />
 		<xs:attributeGroup ref="xs:occurs" />
 	</xs:complexType>
-	
+
 	<xs:complexType name="replacement">
-	  <xs:complexContent>
-		  <xs:restriction base="xs:anyType">
-	    	<xs:attribute name="replacementId" type="xs:string" use="required"/>
-	    	<xs:attribute name="replacementMessage" type="xs:string" use="required"/>
-	    </xs:restriction>
-	  </xs:complexContent>
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType">
+				<xs:attribute name="replacementId" type="xs:string"
+					use="required" />
+				<xs:attribute name="replacementMessage" type="xs:string"
+					use="required" />
+			</xs:restriction>
+		</xs:complexContent>
 	</xs:complexType>
-	
+
 	<xs:simpleType name="pattern">
 		<xs:restriction base="xs:string">
 		</xs:restriction>
 	</xs:simpleType>
 
 	<xs:complexType name="pruneStack">
-	  <xs:complexContent>
-		  <xs:restriction base="xs:anyType"/>
-	  </xs:complexContent>
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType" />
+		</xs:complexContent>
 	</xs:complexType>
-	
+
 	<xs:complexType name="handleException">
-	  <xs:sequence>
-	    <xs:element name="pattern" type="pattern" minOccurs="1" maxOccurs="1"/>
-	    <xs:element name="pruneStack" type="pruneStack" minOccurs="0" maxOccurs="1"/>
-	    <xs:element name="replacement" type="replacement" minOccurs="0" maxOccurs="1"/>
-	  </xs:sequence>
+		<xs:sequence>
+			<xs:element name="pattern" type="pattern" minOccurs="1"
+				maxOccurs="1" />
+			<xs:element name="pruneStack" type="pruneStack" minOccurs="0"
+				maxOccurs="1" />
+			<xs:element name="replacement" type="replacement"
+				minOccurs="0" maxOccurs="1" />
+		</xs:sequence>
 	</xs:complexType>
-	
+
 	<xs:complexType name="failLists">
-	  <xs:complexContent>
-		  <xs:restriction base="xs:anyType"/>
-	  </xs:complexContent>
+		<xs:complexContent>
+			<xs:restriction base="xs:anyType" />
+		</xs:complexContent>
 	</xs:complexType>
-	
+
 	<xs:complexType name="exceptionHandling">
-	  <xs:sequence>
-	      <xs:element name="failLists" type="failLists" minOccurs="0" maxOccurs="1"/>
-	  	<xs:element name="handleException" type="handleException" minOccurs="1" maxOccurs="unbounded"/>
-	  </xs:sequence>
+		<xs:sequence>
+			<xs:element name="failLists" type="failLists" minOccurs="0"
+				maxOccurs="1" />
+			<xs:element name="handleException" type="handleException"
+				minOccurs="1" maxOccurs="unbounded" />
+		</xs:sequence>
 	</xs:complexType>
 
 	<xs:complexType name="component">
 		<xs:sequence>
-			<xs:element name="inputPort" type="port" minOccurs="0" maxOccurs="unbounded" />
-			<xs:element name="outputPort" type="port" minOccurs="0" maxOccurs="unbounded" />
-			<xs:element name="activity" type="activity" minOccurs="0" maxOccurs="unbounded" />
-			<xs:element name="annotation" type="componentAnnotation" minOccurs="0" maxOccurs="unbounded" />
-			<xs:element name="semanticAnnotation" type="semanticAnnotation" minOccurs="0" maxOccurs="unbounded" />
-			<xs:element name="exceptionHandling" type="exceptionHandling" minOccurs="0" maxOccurs="1"/>
+			<xs:element name="inputPort" type="port" minOccurs="0"
+				maxOccurs="unbounded" />
+			<xs:element name="outputPort" type="port" minOccurs="0"
+				maxOccurs="unbounded" />
+			<xs:element name="activity" type="activity" minOccurs="0"
+				maxOccurs="unbounded" />
+			<xs:element name="annotation" type="componentAnnotation"
+				minOccurs="0" maxOccurs="unbounded" />
+			<xs:element name="semanticAnnotation" type="semanticAnnotation"
+				minOccurs="0" maxOccurs="unbounded" />
+			<xs:element name="exceptionHandling" type="exceptionHandling"
+				minOccurs="0" maxOccurs="1" />
 		</xs:sequence>
 	</xs:complexType>
-	
+
 	<xs:complexType name="extends">
-	  <xs:attribute name="profileId" type="xs:string" use="required"/>
+		<xs:attribute name="profileId" type="xs:string" use="required" />
 	</xs:complexType>
 
 	<xs:element name="profile">
@@ -213,9 +225,10 @@
 				<xs:element name="id" type="xs:string" />
 				<xs:element name="name" type="xs:string" />
 				<xs:element name="description" type="xs:string" />
-				<xs:element name="extends" type="extends" minOccurs = "0" />
-				<xs:element name="ontology" type="ontology" minOccurs="0" maxOccurs="unbounded" />
-				<xs:element name="component" type="component" >
+				<xs:element name="extends" type="extends" minOccurs="0" />
+				<xs:element name="ontology" type="ontology" minOccurs="0"
+					maxOccurs="unbounded" />
+				<xs:element name="component" type="component">
 					<xs:unique name="inputPortUnique">
 						<xs:selector xpath="cp:inputPort"></xs:selector>
 						<xs:field xpath="@name"></xs:field>
@@ -236,17 +249,19 @@
 			<xs:field xpath="@ontology" />
 		</xs:keyref>
 		<xs:keyref name="inputKeyRef" refer="ontologyKey">
-			<xs:selector xpath="cp:component/cp:inputPorts/cp:inputPort/cp:semanticAnnotation" />
+			<xs:selector
+				xpath="cp:component/cp:inputPorts/cp:inputPort/cp:semanticAnnotation" />
 			<xs:field xpath="@ontology" />
 		</xs:keyref>
 		<xs:keyref name="outputKeyRef" refer="ontologyKey">
-			<xs:selector xpath="cp:component/cp:outputPorts/cp:outputPort/cp:semanticAnnotation" />
+			<xs:selector
+				xpath="cp:component/cp:outputPorts/cp:outputPort/cp:semanticAnnotation" />
 			<xs:field xpath="@ontology" />
 		</xs:keyref>
 		<xs:keyref name="activityKeyRef" refer="ontologyKey">
-			<xs:selector xpath="cp:component/cp:activities/cp:activity/cp:semanticAnnotation" />
+			<xs:selector
+				xpath="cp:component/cp:activities/cp:activity/cp:semanticAnnotation" />
 			<xs:field xpath="@ontology" />
 		</xs:keyref>
 	</xs:element>
-
 </xs:schema>
