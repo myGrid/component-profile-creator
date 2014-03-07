@@ -1,8 +1,6 @@
 package org.taverna.component.profile_creator;
 
-import static java.awt.GridBagConstraints.BOTH;
-import static java.awt.GridBagConstraints.HORIZONTAL;
-import static java.awt.GridBagConstraints.NORTH;
+import static java.awt.BorderLayout.CENTER;
 import static java.awt.Toolkit.getDefaultToolkit;
 import static java.awt.event.KeyEvent.VK_A;
 import static java.awt.event.KeyEvent.VK_N;
@@ -19,8 +17,8 @@ import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 
+import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
@@ -41,8 +39,6 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
@@ -59,6 +55,7 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 
 import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
+import org.taverna.component.profile_creator.utils.GridPanel;
 
 import uk.org.taverna.ns._2012.component.profile.Component;
 import uk.org.taverna.ns._2012.component.profile.Extends;
@@ -87,28 +84,6 @@ public class ProfileCreator extends JFrame {
 		boolean oldMod = this.modified;
 		this.modified = modified;
 		firePropertyChange("modified", oldMod, modified);
-	}
-
-	static class GridPanel extends JPanel {
-		public GridPanel() {
-			setLayout(new GridBagLayout());
-		}
-
-		public void add(JComponent component, int x, int y) {
-			add(component, x, y, 1);
-		}
-
-		private void add(JComponent component, int x, int y, int width) {
-			GridBagConstraints constr = new GridBagConstraints();
-			constr.gridx = x;
-			constr.gridy = y;
-			constr.weightx = (x == 0 ? 0 : 1);
-			constr.weighty = (y < 4 ? 0 : 1);
-			constr.gridwidth = width;
-			constr.fill = (x == 0 ? HORIZONTAL : BOTH);
-			constr.anchor = NORTH;
-			add(component, constr);
-		}
 	}
 
 	abstract class WatchingAction extends AbstractAction implements
@@ -354,20 +329,22 @@ public class ProfileCreator extends JFrame {
 						new EditOntology() {
 							@Override
 							public void edited(Ontology ont) {
-								for (Ontology o : profile.getOntology())
-									if (o.getId().equals(ont.getId())) {
-										showMessageDialog(
-												ProfileCreator.this,
-												"That ontology ID is already present!",
-												"Duplicate Ontology",
-												ERROR_MESSAGE);
-										return;
-									}
-								profile.getOntology().add(ont);
-								addOntologyRow(ont);
-								setModified(true);
+								doEdit(ont);
 							}
 						}).setVisible(true);
+			}
+
+			private void doEdit(Ontology ont) {
+				for (Ontology o : profile.getOntology())
+					if (o.getId().equals(ont.getId())) {
+						showMessageDialog(ProfileCreator.this,
+								"That ontology ID is already present!",
+								"Duplicate Ontology", ERROR_MESSAGE);
+						return;
+					}
+				profile.getOntology().add(ont);
+				addOntologyRow(ont);
+				setModified(true);
 			}
 		};
 		Action addInput = new AbstractAction("Add Input") {
@@ -393,45 +370,35 @@ public class ProfileCreator extends JFrame {
 		fileMenu.add(quitAction);
 
 		JTabbedPane tabs;
-		add(tabs = new JTabbedPane());
+		getContentPane().setLayout(new BorderLayout());
+		getContentPane().add(tabs = new JTabbedPane(), CENTER);
 		GridPanel panel;
-		tabs.add("Global", panel = new GridPanel());
+		tabs.add("Global", panel = new GridPanel(4));
 		setLayout(new GridBagLayout());
-		panel.add(new JLabel("ID"), 0, 0);
-		panel.add(id = new JLabel(profile.getId()), 1, 0);
-		panel.add(new JLabel("Name"), 0, 1);
-		panel.add(title = new JTextField(), 1, 1);
-		panel.add(new JLabel("Description"), 0, 2);
-		panel.add(new JScrollPane(description = new JTextArea(3, 40)), 1, 2);
-		panel.add(new JLabel("Extends"), 0, 3);
-		panel.add(extend = new JTextField(), 1, 3);
-		panel.add(new JButton(addOnt), 0, 4);
-
-		JTable jt;
-
-		panel.add(new JScrollPane(jt = defineTableList("Name", "Location")), 1,
-				4);
+		id = panel.add("ID:", new JLabel(profile.getId()), 0);
+		title = panel.add("Name:", new JTextField(), 1);
+		description = panel.add("Description:", new JTextArea(3, 40), 2);
+		extend = panel.add("Extends:", new JTextField(), 3);
+		JTable jt = panel.add(addOnt, defineTableList("Name", "Location"), 4);
 		ontologyList = (DefaultTableModel) jt.getModel();
 		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
 		jt.getColumn("Location").setMinWidth(192);
 
-		tabs.add("Inputs", panel = new GridPanel());
-		panel.add(new JButton(addInput), 0, 0);
-		panel.add(
-				new JScrollPane(jt = defineTableList("Cardinality", "Depth",
-						"Name", "Annotations")), 1, 0);
+		tabs.add("Inputs", panel = new GridPanel(0));
+		jt = panel.add(addInput,
+				defineTableList("Cardinality", "Depth", "Name", "Annotations"),
+				0);
 		inputs = (DefaultTableModel) jt.getModel();
 
-		tabs.add("Outputs", panel = new GridPanel());
-		panel.add(new JButton(addOutput), 0, 0);
-		panel.add(
-				new JScrollPane(jt = defineTableList("Cardinality", "Depth",
-						"Name", "Annotations")), 1, 0);
+		tabs.add("Outputs", panel = new GridPanel(0));
+		jt = panel.add(addOutput,
+				defineTableList("Cardinality", "Depth", "Name", "Annotations"),
+				0);
 		outputs = (DefaultTableModel) jt.getModel();
 
-		tabs.add("Activities", panel = new GridPanel());
-		tabs.add("Annotations", panel = new GridPanel());
-		tabs.add("Extra Features", panel = new GridPanel());
+		tabs.add("Activities", panel = new GridPanel(0));
+		tabs.add("Annotations", panel = new GridPanel(0));
+		tabs.add("Extra Features", panel = new GridPanel(0));
 
 		abstract class ModifiedListener implements DocumentListener {
 			public abstract void respond();
