@@ -27,7 +27,9 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.EventObject;
+import java.util.List;
 import java.util.UUID;
 
 import javax.swing.AbstractAction;
@@ -56,7 +58,7 @@ import javax.swing.table.TableColumn;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 
-import org.taverna.component.profile_creator.AddOntologyDialog.AddOntology;
+import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
 
 import uk.org.taverna.ns._2012.component.profile.Component;
 import uk.org.taverna.ns._2012.component.profile.Extends;
@@ -115,10 +117,10 @@ public class ProfileCreator extends JFrame {
 			super(string);
 			if (key != 0) {
 				putValue(
-						Action.ACCELERATOR_KEY,
+						ACCELERATOR_KEY,
 						getKeyStroke(key, getDefaultToolkit()
 								.getMenuShortcutKeyMask()));
-				putValue(Action.MNEMONIC_KEY, key);
+				putValue(MNEMONIC_KEY, key);
 			}
 			ProfileCreator.this.addPropertyChangeListener(this);
 		}
@@ -153,9 +155,115 @@ public class ProfileCreator extends JFrame {
 		ontologyList.addRow(new Object[] { ont.getId(), ont.getValue(), jb });
 	}
 
-	private void addPort(DefaultTableModel table, Port port) {
-		// FIXME
-		table.addRow(new Object[] {});
+	private void addPort(final DefaultTableModel table,
+			final List<Port> portCollection, final Port port) {
+		class Range {
+			int from;
+			Integer to;
+
+			Range(BigInteger from, String to) {
+				if (from == null)
+					this.from = 1;
+				else
+					this.from = from.intValue();
+				if (to == null)
+					this.to = 1;
+				else if (to.equals("unbounded"))
+					this.to = null;
+				else
+					this.to = Integer.parseInt(to);
+			}
+
+			@Override
+			public String toString() {
+				return (from == 0 ? "" : "" + from) + " - "
+						+ (to == null ? "" : "" + to);
+			}
+		}
+
+		JButton jb = new JButton(new AbstractAction("Del") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				int row = 0;
+				for (Port p : portCollection) {
+					if (p == port) {
+						portCollection.remove(p);
+						table.removeRow(row);
+						setModified(true);
+						break;
+					}
+					row++;
+				}
+			}
+		});
+		// FIXME annotations
+		table.addRow(new Object[] {
+				new Range(port.getMinOccurs(), port.getMaxOccurs()),
+				new Range(port.getMinDepth(), port.getMaxDepth()),
+				port.getName() == null ? "" : port.getName(), "", jb });
+	}
+
+	private JTable defineTableList(Object... columns) {
+		final Object[] realColumns = new Object[columns.length + 1];
+		System.arraycopy(columns, 0, realColumns, 0, columns.length);
+		realColumns[columns.length] = "";
+		JTable jt = new JTable(new DefaultTableModel(new Object[0][],
+				realColumns) {
+			@Override
+			public boolean isCellEditable(int x, int y) {
+				return y == (realColumns.length - 1);
+			}
+		});
+		TableColumn bcol = jt.getColumn("");
+		bcol.setMaxWidth(new JButton("Del").getPreferredSize().width);
+		bcol.setCellRenderer(new TableCellRenderer() {
+			@Override
+			public JComponent getTableCellRendererComponent(JTable table,
+					Object value, boolean isSelected, boolean hasFocus,
+					int row, int column) {
+				return (JComponent) value;
+			}
+		});
+		bcol.setCellEditor(new TableCellEditor() {
+			@Override
+			public Object getCellEditorValue() {
+				return null;
+			}
+
+			@Override
+			public boolean isCellEditable(EventObject anEvent) {
+				return true;
+			}
+
+			@Override
+			public boolean shouldSelectCell(EventObject anEvent) {
+				return false;
+			}
+
+			@Override
+			public boolean stopCellEditing() {
+				return true;
+			}
+
+			@Override
+			public void cancelCellEditing() {
+			}
+
+			@Override
+			public void addCellEditorListener(CellEditorListener l) {
+			}
+
+			@Override
+			public void removeCellEditorListener(CellEditorListener l) {
+			}
+
+			@Override
+			public JComponent getTableCellEditorComponent(JTable table,
+					Object value, boolean isSelected, int row, int column) {
+				return (JComponent) value;
+			}
+		});
+		return jt;
 	}
 
 	public ProfileCreator() throws JAXBException {
@@ -242,21 +350,34 @@ public class ProfileCreator extends JFrame {
 		Action addOnt = new AbstractAction("Add Ontology") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				new AddOntologyDialog(ProfileCreator.this, new AddOntology() {
-					@Override
-					public void add(Ontology ont) {
-						for (Ontology o : profile.getOntology())
-							if (o.getId().equals(ont.getId())) {
-								showMessageDialog(ProfileCreator.this,
-										"That ontology ID is already present!",
-										"Duplicate Ontology", ERROR_MESSAGE);
-								return;
+				new EditOntologyDialog(ProfileCreator.this, "Add an Ontology",
+						new EditOntology() {
+							@Override
+							public void edited(Ontology ont) {
+								for (Ontology o : profile.getOntology())
+									if (o.getId().equals(ont.getId())) {
+										showMessageDialog(
+												ProfileCreator.this,
+												"That ontology ID is already present!",
+												"Duplicate Ontology",
+												ERROR_MESSAGE);
+										return;
+									}
+								profile.getOntology().add(ont);
+								addOntologyRow(ont);
+								setModified(true);
 							}
-						profile.getOntology().add(ont);
-						addOntologyRow(ont);
-						setModified(true);
-					}
-				});
+						}).setVisible(true);
+			}
+		};
+		Action addInput = new AbstractAction("Add Input") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+			}
+		};
+		Action addOutput = new AbstractAction("Add Output") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
 			}
 		};
 
@@ -285,72 +406,29 @@ public class ProfileCreator extends JFrame {
 		panel.add(new JLabel("Extends"), 0, 3);
 		panel.add(extend = new JTextField(), 1, 3);
 		panel.add(new JButton(addOnt), 0, 4);
+
 		JTable jt;
-		panel.add(new JScrollPane(jt = new JTable(
-				ontologyList = new DefaultTableModel() {
-					@Override
-					public boolean isCellEditable(int x, int y) {
-						return y == 2;
-					}
-				})), 1, 4);
+
+		panel.add(new JScrollPane(jt = defineTableList("Name", "Location")), 1,
+				4);
+		ontologyList = (DefaultTableModel) jt.getModel();
 		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
-		ontologyList.addColumn("Name");
-		ontologyList.addColumn("Location");
-		ontologyList.addColumn("");
 		jt.getColumn("Location").setMinWidth(192);
-		TableColumn bcol = jt.getColumn("");
-		bcol.setMaxWidth(new JButton("Del").getPreferredSize().width);
-		bcol.setCellRenderer(new TableCellRenderer() {
-			@Override
-			public JComponent getTableCellRendererComponent(JTable table,
-					Object value, boolean isSelected, boolean hasFocus,
-					int row, int column) {
-				return (JComponent) value;
-			}
-		});
-		bcol.setCellEditor(new TableCellEditor() {
-			@Override
-			public Object getCellEditorValue() {
-				return null;
-			}
 
-			@Override
-			public boolean isCellEditable(EventObject anEvent) {
-				return true;
-			}
-
-			@Override
-			public boolean shouldSelectCell(EventObject anEvent) {
-				return false;
-			}
-
-			@Override
-			public boolean stopCellEditing() {
-				return true;
-			}
-
-			@Override
-			public void cancelCellEditing() {
-			}
-
-			@Override
-			public void addCellEditorListener(CellEditorListener l) {
-			}
-
-			@Override
-			public void removeCellEditorListener(CellEditorListener l) {
-			}
-
-			@Override
-			public JComponent getTableCellEditorComponent(JTable table,
-					Object value, boolean isSelected, int row, int column) {
-				return (JComponent) value;
-			}
-		});
 		tabs.add("Inputs", panel = new GridPanel());
-		inputs = new DefaultTableModel(){};
+		panel.add(new JButton(addInput), 0, 0);
+		panel.add(
+				new JScrollPane(jt = defineTableList("Cardinality", "Depth",
+						"Name", "Annotations")), 1, 0);
+		inputs = (DefaultTableModel) jt.getModel();
+
 		tabs.add("Outputs", panel = new GridPanel());
-		outputs = new DefaultTableModel();
+		panel.add(new JButton(addOutput), 0, 0);
+		panel.add(
+				new JScrollPane(jt = defineTableList("Cardinality", "Depth",
+						"Name", "Annotations")), 1, 0);
+		outputs = (DefaultTableModel) jt.getModel();
+
 		tabs.add("Activities", panel = new GridPanel());
 		tabs.add("Annotations", panel = new GridPanel());
 		tabs.add("Extra Features", panel = new GridPanel());
@@ -496,11 +574,13 @@ public class ProfileCreator extends JFrame {
 		Component comp = p.getComponent();
 		inputs.setRowCount(0);
 		for (Port port : comp.getInputPort())
-			addPort(inputs, port);
+			addPort(inputs, comp.getInputPort(), port);
 		outputs.setRowCount(0);
 		for (Port port : comp.getOutputPort())
-			addPort(outputs, port);
-		// TODO Display rest of content of component
+			addPort(outputs, comp.getOutputPort(), port);
+		// TODO activity
+		// TODO annotation, semantic annotation
+		// TODO exception handling
 		file = f;
 		profile = p;
 		setModified(false);

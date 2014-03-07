@@ -1,8 +1,12 @@
 package org.taverna.component.profile_creator;
 
 import static java.awt.GridBagConstraints.EAST;
+import static java.awt.GridBagConstraints.HORIZONTAL;
+import static java.awt.event.KeyEvent.VK_ESCAPE;
+import static javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
+import static javax.swing.KeyStroke.getKeyStroke;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -28,18 +32,18 @@ import uk.org.taverna.ns._2012.component.profile.Ontology;
  * @author Donal Fellows
  */
 @SuppressWarnings("serial")
-public class AddOntologyDialog extends JDialog {
-	private AddOntology callback;
+public class EditOntologyDialog extends JDialog {
 	private Ontology ont;
 	private JTextField name, address;
 
-	public AddOntologyDialog(final ProfileCreator parent, AddOntology callback) {
-		super(parent, "Add an Ontology", true);
+	public EditOntologyDialog(final ProfileCreator parent, String title,
+			final EditOntology callback) {
+		super(parent, title, true);
 		Action okAction = new AbstractAction("OK") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				String name = AddOntologyDialog.this.name.getText().trim();
-				String address = AddOntologyDialog.this.address.getText()
+				String name = EditOntologyDialog.this.name.getText().trim();
+				String address = EditOntologyDialog.this.address.getText()
 						.trim();
 				if (name.isEmpty() || address.isEmpty()) {
 					showMessageDialog(parent, "Both fields must not be empty.",
@@ -54,7 +58,7 @@ public class AddOntologyDialog extends JDialog {
 				try {
 					new URI(address);
 					// Don't need the value!
-					// TODO Should we check if the URL actually refers to an ontology?
+					// TODO Check if the URL actually refers to an ontology?
 				} catch (URISyntaxException ex) {
 					showMessageDialog(parent, ex.getMessage(), "Bad Address",
 							ERROR_MESSAGE);
@@ -62,17 +66,16 @@ public class AddOntologyDialog extends JDialog {
 				}
 				ont.setId(name);
 				ont.setValue(address);
-				AddOntologyDialog.this.callback.add(ont);
-				AddOntologyDialog.this.dispose();
+				callback.edited(ont);
+				dispose();
 			}
 		};
 		Action cancelAction = new AbstractAction("Cancel") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				AddOntologyDialog.this.dispose();
+				dispose();
 			}
 		};
-		this.callback = callback;
 		ont = parent.factory.createOntology();
 		setLayout(new GridBagLayout());
 		GridBagConstraints gbc = new GridBagConstraints();
@@ -83,7 +86,7 @@ public class AddOntologyDialog extends JDialog {
 		add(new JLabel("Address:"), gbc);
 		gbc.gridx = 1;
 		gbc.gridy = 0;
-		gbc.fill = GridBagConstraints.HORIZONTAL;
+		gbc.fill = HORIZONTAL;
 		add(name = new JTextField(30), gbc);
 		gbc.gridy = 1;
 		add(address = new JTextField(30), gbc);
@@ -95,13 +98,16 @@ public class AddOntologyDialog extends JDialog {
 		gbc.gridy = 3;
 		add(jc = new JPanel(), gbc);
 		jc.add(new JButton(cancelAction));
-		jc.add(new JButton(okAction));
+		JButton ok;
+		jc.add(ok = new JButton(okAction));
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		getRootPane().setDefaultButton(ok);
+		getRootPane().registerKeyboardAction(cancelAction,
+				getKeyStroke(VK_ESCAPE, 0), WHEN_IN_FOCUSED_WINDOW);
 		pack();
-		setVisible(true);
 	}
 
-	public interface AddOntology {
-		void add(Ontology ont);
+	public interface EditOntology {
+		void edited(Ontology ont);
 	}
 }
