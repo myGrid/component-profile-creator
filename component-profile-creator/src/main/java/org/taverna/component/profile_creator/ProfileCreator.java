@@ -2,6 +2,7 @@ package org.taverna.component.profile_creator;
 
 import static java.awt.GridBagConstraints.BOTH;
 import static java.awt.GridBagConstraints.HORIZONTAL;
+import static java.awt.GridBagConstraints.NORTH;
 import static java.awt.Toolkit.getDefaultToolkit;
 import static java.awt.event.KeyEvent.VK_A;
 import static java.awt.event.KeyEvent.VK_N;
@@ -18,7 +19,6 @@ import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -39,8 +39,10 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -56,8 +58,11 @@ import javax.xml.bind.JAXBException;
 
 import org.taverna.component.profile_creator.AddOntologyDialog.AddOntology;
 
+import uk.org.taverna.ns._2012.component.profile.Component;
+import uk.org.taverna.ns._2012.component.profile.Extends;
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Ontology;
+import uk.org.taverna.ns._2012.component.profile.Port;
 import uk.org.taverna.ns._2012.component.profile.Profile;
 
 @SuppressWarnings("serial")
@@ -65,9 +70,9 @@ public class ProfileCreator extends JFrame {
 	private final JAXBContext context;
 	final ObjectFactory factory;
 	private final JLabel id;
-	private final JTextField title;
+	private final JTextField title, extend;
 	private final JTextArea description;
-	private final DefaultTableModel ontologyList;
+	private final DefaultTableModel ontologyList, inputs, outputs;
 	private File file;
 	private Profile profile;
 	private boolean modified;
@@ -82,15 +87,26 @@ public class ProfileCreator extends JFrame {
 		firePropertyChange("modified", oldMod, modified);
 	}
 
-	private void add(JComponent c, int x, int y) {
-		GridBagConstraints constr = new GridBagConstraints();
-		constr.gridx = x;
-		constr.gridy = y;
-		constr.weightx = (x == 0 ? 0 : 1);
-		constr.weighty = (y < 2 ? 0 : 1);
-		constr.fill = (x == 0 ? HORIZONTAL : BOTH);
-		constr.anchor = GridBagConstraints.NORTH;
-		add(c, constr);
+	static class GridPanel extends JPanel {
+		public GridPanel() {
+			setLayout(new GridBagLayout());
+		}
+
+		public void add(JComponent component, int x, int y) {
+			add(component, x, y, 1);
+		}
+
+		private void add(JComponent component, int x, int y, int width) {
+			GridBagConstraints constr = new GridBagConstraints();
+			constr.gridx = x;
+			constr.gridy = y;
+			constr.weightx = (x == 0 ? 0 : 1);
+			constr.weighty = (y < 4 ? 0 : 1);
+			constr.gridwidth = width;
+			constr.fill = (x == 0 ? HORIZONTAL : BOTH);
+			constr.anchor = NORTH;
+			add(component, constr);
+		}
 	}
 
 	abstract class WatchingAction extends AbstractAction implements
@@ -135,6 +151,11 @@ public class ProfileCreator extends JFrame {
 			}
 		});
 		ontologyList.addRow(new Object[] { ont.getId(), ont.getValue(), jb });
+	}
+
+	private void addPort(DefaultTableModel table, Port port) {
+		// FIXME
+		table.addRow(new Object[] {});
 	}
 
 	public ProfileCreator() throws JAXBException {
@@ -250,31 +271,41 @@ public class ProfileCreator extends JFrame {
 		fileMenu.add(new JSeparator());
 		fileMenu.add(quitAction);
 
+		JTabbedPane tabs;
+		add(tabs = new JTabbedPane());
+		GridPanel panel;
+		tabs.add("Global", panel = new GridPanel());
 		setLayout(new GridBagLayout());
-		add(new JLabel("ID"), 0, 0);
-		add(id = new JLabel(profile.getId()), 1, 0);
-		add(new JLabel("Name"), 0, 1);
-		add(title = new JTextField(), 1, 1);
-		add(new JLabel("Description"), 0, 2);
-		add(new JScrollPane(description = new JTextArea(3, 40)), 1, 2);
-		add(new JButton(addOnt), 0, 3);
+		panel.add(new JLabel("ID"), 0, 0);
+		panel.add(id = new JLabel(profile.getId()), 1, 0);
+		panel.add(new JLabel("Name"), 0, 1);
+		panel.add(title = new JTextField(), 1, 1);
+		panel.add(new JLabel("Description"), 0, 2);
+		panel.add(new JScrollPane(description = new JTextArea(3, 40)), 1, 2);
+		panel.add(new JLabel("Extends"), 0, 3);
+		panel.add(extend = new JTextField(), 1, 3);
+		panel.add(new JButton(addOnt), 0, 4);
 		JTable jt;
-		add(new JScrollPane(jt = new JTable(
-				ontologyList = new DefaultTableModel())), 1, 3);
-		jt.setPreferredScrollableViewportSize(new Dimension(256, 64));
+		panel.add(new JScrollPane(jt = new JTable(
+				ontologyList = new DefaultTableModel() {
+					@Override
+					public boolean isCellEditable(int x, int y) {
+						return y == 2;
+					}
+				})), 1, 4);
+		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
 		ontologyList.addColumn("Name");
 		ontologyList.addColumn("Location");
 		ontologyList.addColumn("");
 		jt.getColumn("Location").setMinWidth(192);
-		// jt.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 		TableColumn bcol = jt.getColumn("");
 		bcol.setMaxWidth(new JButton("Del").getPreferredSize().width);
 		bcol.setCellRenderer(new TableCellRenderer() {
 			@Override
-			public Component getTableCellRendererComponent(JTable table,
+			public JComponent getTableCellRendererComponent(JTable table,
 					Object value, boolean isSelected, boolean hasFocus,
 					int row, int column) {
-				return (Component) value;
+				return (JComponent) value;
 			}
 		});
 		bcol.setCellEditor(new TableCellEditor() {
@@ -311,30 +342,63 @@ public class ProfileCreator extends JFrame {
 			}
 
 			@Override
-			public Component getTableCellEditorComponent(JTable table,
+			public JComponent getTableCellEditorComponent(JTable table,
 					Object value, boolean isSelected, int row, int column) {
-				return (Component) value;
+				return (JComponent) value;
 			}
 		});
+		tabs.add("Inputs", panel = new GridPanel());
+		inputs = new DefaultTableModel(){};
+		tabs.add("Outputs", panel = new GridPanel());
+		outputs = new DefaultTableModel();
+		tabs.add("Activities", panel = new GridPanel());
+		tabs.add("Annotations", panel = new GridPanel());
+		tabs.add("Extra Features", panel = new GridPanel());
 
-		DocumentListener l = new DocumentListener() {
+		abstract class ModifiedListener implements DocumentListener {
+			public abstract void respond();
+
 			@Override
 			public void insertUpdate(DocumentEvent e) {
 				setModified(true);
+				respond();
 			}
 
 			@Override
 			public void removeUpdate(DocumentEvent e) {
 				setModified(true);
+				respond();
 			}
 
 			@Override
 			public void changedUpdate(DocumentEvent e) {
-				setModified(true);
 			}
-		};
-		title.getDocument().addDocumentListener(l);
-		description.getDocument().addDocumentListener(l);
+		}
+		title.getDocument().addDocumentListener(new ModifiedListener() {
+			@Override
+			public void respond() {
+				profile.setName(title.getText().trim());
+			}
+		});
+		description.getDocument().addDocumentListener(new ModifiedListener() {
+			@Override
+			public void respond() {
+				profile.setDescription(description.getText().trim());
+			}
+		});
+		extend.getDocument().addDocumentListener(new ModifiedListener() {
+			@Override
+			public void respond() {
+				String ext = extend.getText().trim();
+				if (ext.isEmpty())
+					profile.setExtends(null);
+				else {
+					Extends e = factory.createExtends();
+					e.setProfileId(ext);
+					profile.setExtends(e);
+				}
+			}
+		});
 
 		pack();
 		validate();
@@ -424,10 +488,19 @@ public class ProfileCreator extends JFrame {
 		id.setText(p.getId());
 		title.setText(p.getName());
 		description.setText(p.getDescription());
+		Extends e = p.getExtends();
+		extend.setText(e == null ? "" : e.getProfileId());
 		ontologyList.setRowCount(0);
 		for (Ontology o : p.getOntology())
 			addOntologyRow(o);
-		// TODO Display rest of content of profile
+		Component comp = p.getComponent();
+		inputs.setRowCount(0);
+		for (Port port : comp.getInputPort())
+			addPort(inputs, port);
+		outputs.setRowCount(0);
+		for (Port port : comp.getOutputPort())
+			addPort(outputs, port);
+		// TODO Display rest of content of component
 		file = f;
 		profile = p;
 		setModified(false);
