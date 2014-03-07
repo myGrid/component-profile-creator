@@ -1,5 +1,6 @@
 package org.taverna.component.profile_creator;
 
+import static java.awt.GridBagConstraints.BOTH;
 import static java.awt.GridBagConstraints.HORIZONTAL;
 import static java.awt.Toolkit.getDefaultToolkit;
 import static java.awt.event.KeyEvent.VK_A;
@@ -17,15 +18,16 @@ import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 
+import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
+import java.util.EventObject;
 import java.util.UUID;
 
 import javax.swing.AbstractAction;
@@ -37,15 +39,18 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
+import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.KeyStroke;
+import javax.swing.event.CellEditorListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableColumn;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 
@@ -62,6 +67,7 @@ public class ProfileCreator extends JFrame {
 	private final JLabel id;
 	private final JTextField title;
 	private final JTextArea description;
+	private final DefaultTableModel ontologyList;
 	private File file;
 	private Profile profile;
 	private boolean modified;
@@ -81,8 +87,9 @@ public class ProfileCreator extends JFrame {
 		constr.gridx = x;
 		constr.gridy = y;
 		constr.weightx = (x == 0 ? 0 : 1);
-		constr.weighty = 1;
-		constr.fill = HORIZONTAL;
+		constr.weighty = (y < 2 ? 0 : 1);
+		constr.fill = (x == 0 ? HORIZONTAL : BOTH);
+		constr.anchor = GridBagConstraints.NORTH;
 		add(c, constr);
 	}
 
@@ -110,13 +117,34 @@ public class ProfileCreator extends JFrame {
 		}
 	}
 
+	private void addOntologyRow(Ontology ont) {
+		final String id = ont.getId();
+		JButton jb = new JButton(new AbstractAction("Del") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				int row = 0;
+				for (Ontology o : profile.getOntology()) {
+					if (o.getId().equals(id)) {
+						profile.getOntology().remove(o);
+						ontologyList.removeRow(row);
+						setModified(true);
+						break;
+					}
+					row++;
+				}
+			}
+		});
+		ontologyList.addRow(new Object[] { ont.getId(), ont.getValue(), jb });
+	}
+
 	public ProfileCreator() throws JAXBException {
+		super("Taverna Component Profile Creator");
+		setDefaultCloseOperation(EXIT_ON_CLOSE);
+
 		context = JAXBContext.newInstance(Profile.class);
 		factory = new ObjectFactory();
 		profile = createDefault(factory);
-		JMenu fileMenu;
-		this.setJMenuBar(new JMenuBar());
-		this.getJMenuBar().add(fileMenu = new JMenu("File"));
+
 		Action newAction = new WatchingAction("New", VK_N) {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -204,12 +232,16 @@ public class ProfileCreator extends JFrame {
 								return;
 							}
 						profile.getOntology().add(ont);
-						// FIXME Update displayed list
+						addOntologyRow(ont);
 						setModified(true);
 					}
 				});
 			}
 		};
+
+		JMenu fileMenu;
+		setJMenuBar(new JMenuBar());
+		getJMenuBar().add(fileMenu = new JMenu("File"));
 		fileMenu.add(newAction);
 		fileMenu.add(openAction);
 		fileMenu.add(new JSeparator());
@@ -217,6 +249,7 @@ public class ProfileCreator extends JFrame {
 		fileMenu.add(saveAsAction);
 		fileMenu.add(new JSeparator());
 		fileMenu.add(quitAction);
+
 		setLayout(new GridBagLayout());
 		add(new JLabel("ID"), 0, 0);
 		add(id = new JLabel(profile.getId()), 1, 0);
@@ -225,6 +258,65 @@ public class ProfileCreator extends JFrame {
 		add(new JLabel("Description"), 0, 2);
 		add(new JScrollPane(description = new JTextArea(3, 40)), 1, 2);
 		add(new JButton(addOnt), 0, 3);
+		JTable jt;
+		add(new JScrollPane(jt = new JTable(
+				ontologyList = new DefaultTableModel())), 1, 3);
+		jt.setPreferredScrollableViewportSize(new Dimension(256, 64));
+		ontologyList.addColumn("Name");
+		ontologyList.addColumn("Location");
+		ontologyList.addColumn("");
+		jt.getColumn("Location").setMinWidth(192);
+		// jt.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+		TableColumn bcol = jt.getColumn("");
+		bcol.setMaxWidth(new JButton("Del").getPreferredSize().width);
+		bcol.setCellRenderer(new TableCellRenderer() {
+			@Override
+			public Component getTableCellRendererComponent(JTable table,
+					Object value, boolean isSelected, boolean hasFocus,
+					int row, int column) {
+				return (Component) value;
+			}
+		});
+		bcol.setCellEditor(new TableCellEditor() {
+			@Override
+			public Object getCellEditorValue() {
+				return null;
+			}
+
+			@Override
+			public boolean isCellEditable(EventObject anEvent) {
+				return true;
+			}
+
+			@Override
+			public boolean shouldSelectCell(EventObject anEvent) {
+				return false;
+			}
+
+			@Override
+			public boolean stopCellEditing() {
+				return true;
+			}
+
+			@Override
+			public void cancelCellEditing() {
+			}
+
+			@Override
+			public void addCellEditorListener(CellEditorListener l) {
+			}
+
+			@Override
+			public void removeCellEditorListener(CellEditorListener l) {
+			}
+
+			@Override
+			public Component getTableCellEditorComponent(JTable table,
+					Object value, boolean isSelected, int row, int column) {
+				return (Component) value;
+			}
+		});
+
 		DocumentListener l = new DocumentListener() {
 			@Override
 			public void insertUpdate(DocumentEvent e) {
@@ -243,8 +335,7 @@ public class ProfileCreator extends JFrame {
 		};
 		title.getDocument().addDocumentListener(l);
 		description.getDocument().addDocumentListener(l);
-		setTitle("Taverna Component Profile Creator");
-		setDefaultCloseOperation(EXIT_ON_CLOSE);
+
 		pack();
 		validate();
 		setModified(true);
@@ -333,7 +424,9 @@ public class ProfileCreator extends JFrame {
 		id.setText(p.getId());
 		title.setText(p.getName());
 		description.setText(p.getDescription());
-		// TODO Display ontology list
+		ontologyList.setRowCount(0);
+		for (Ontology o : p.getOntology())
+			addOntologyRow(o);
 		// TODO Display rest of content of profile
 		file = f;
 		profile = p;
