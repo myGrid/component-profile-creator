@@ -55,6 +55,7 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 
 import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
+import org.taverna.component.profile_creator.EditPortDialog.EditPort;
 import org.taverna.component.profile_creator.utils.GridPanel;
 
 import uk.org.taverna.ns._2012.component.profile.Component;
@@ -350,11 +351,57 @@ public class ProfileCreator extends JFrame {
 		Action addInput = new AbstractAction("Add Input") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				new EditPortDialog(ProfileCreator.this,
+						"Add an Input Port Constraint", new EditPort() {
+							@Override
+							public void edited(Port port) {
+								doEdit(port);
+							}
+						}).setVisible(true);
+			}
+
+			private void doEdit(Port port) {
+				if (port.getName() != null)
+					for (Port p : profile.getComponent().getInputPort())
+						if (p.getName() != null
+								&& p.getName().equals(port.getName())) {
+							showMessageDialog(
+									ProfileCreator.this,
+									"That input port already has a constraint!",
+									"Duplicate Input Port Constraint",
+									ERROR_MESSAGE);
+							return;
+						}
+				profile.getComponent().getInputPort().add(port);
+				setModified(true);
 			}
 		};
 		Action addOutput = new AbstractAction("Add Output") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				new EditPortDialog(ProfileCreator.this,
+						"Add an Output Port Constraint", new EditPort() {
+							@Override
+							public void edited(Port port) {
+								doEdit(port);
+							}
+						}).setVisible(true);
+			}
+
+			private void doEdit(Port port) {
+				if (port.getName() != null)
+					for (Port p : profile.getComponent().getOutputPort())
+						if (p.getName() != null
+								&& p.getName().equals(port.getName())) {
+							showMessageDialog(
+									ProfileCreator.this,
+									"That output port already has a constraint!",
+									"Duplicate Output Port Constraint",
+									ERROR_MESSAGE);
+							return;
+						}
+				profile.getComponent().getOutputPort().add(port);
+				setModified(true);
 			}
 		};
 
