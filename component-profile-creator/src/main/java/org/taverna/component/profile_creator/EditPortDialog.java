@@ -110,15 +110,11 @@ public class EditPortDialog extends JDialog {
 		if (description) {
 			PortAnnotation ann = factory.createPortAnnotation();
 			ann.setValue(PortAnnotations.DESCRIPTION);
-			ann.setMinOccurs(BigInteger.ONE);
-			ann.setMaxOccurs("1");
 			pa.add(ann);
 		}
 		if (example) {
 			PortAnnotation ann = factory.createPortAnnotation();
 			ann.setValue(PortAnnotations.EXAMPLE);
-			ann.setMinOccurs(BigInteger.ONE);
-			ann.setMaxOccurs("1");
 			pa.add(ann);
 		}
 		port.getAnnotation().clear();
