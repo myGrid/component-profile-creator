@@ -8,12 +8,16 @@ import static javax.swing.KeyStroke.getKeyStroke;
 
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
+import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
@@ -28,7 +32,11 @@ import javax.swing.event.ChangeListener;
 
 import org.taverna.component.profile_creator.utils.GridPanel;
 
+import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Port;
+import uk.org.taverna.ns._2012.component.profile.PortAnnotation;
+import uk.org.taverna.ns._2012.component.profile.PortAnnotations;
+import uk.org.taverna.ns._2012.component.profile.SemanticAnnotation;
 
 /**
  * Dialog to allow users to define constraints on a port.
@@ -39,12 +47,22 @@ import uk.org.taverna.ns._2012.component.profile.Port;
 @SuppressWarnings("serial")
 public class EditPortDialog extends JDialog {
 	private final JFrame parent;
+	private final ObjectFactory factory;
 	private Port port;
-	private JTextField name;
-	private JSpinner minDepth, maxDepth, minOccurs, maxOccurs;
+	private final JTextField name;
+	private final PositiveUnboundedModel minDepth, maxDepth, minOccurs,
+			maxOccurs;
+	private final JCheckBox mandateDescription, mandateExample;
+
+	/*
+	 * <semanticAnnotation class="http://purl.org/DP/components#PortType"
+	 * predicate="http://purl.org/DP/components#portType" ontology="components">
+	 * http://purl.org/DP/components#ParameterPort
+	 * </semanticAnnotation>
+	 */
 
 	public boolean validateModel(String name, int mindepth, Integer maxdepth,
-			int minoccurs, Integer maxoccurs) {
+			int minoccurs, Integer maxoccurs, boolean b, boolean c) {
 		if (!name.isEmpty() && !name.matches("^[a-zA-Z]\\w*$")) {
 			showMessageDialog(parent,
 					"Name must be a simple word, if specified.", "Bad Format",
@@ -61,8 +79,9 @@ public class EditPortDialog extends JDialog {
 					"Bad Occurence Count", ERROR_MESSAGE);
 			return false;
 		}
+		// FIXME semantic annotations
 		try {
-			new URI("address");// FIXME
+			new URI("address");
 			// Don't need the value!
 			// TODO Check if the URL actually refers to an ontology?
 		} catch (URISyntaxException ex) {
@@ -74,7 +93,7 @@ public class EditPortDialog extends JDialog {
 	}
 
 	Port doUpdate(String name, int mindepth, Integer maxdepth, int minoccurs,
-			Integer maxoccurs) {
+			Integer maxoccurs, boolean description, boolean example) {
 		if (name.isEmpty())
 			port.setName(null);
 		else {
@@ -82,36 +101,59 @@ public class EditPortDialog extends JDialog {
 			if (maxoccurs == null || maxoccurs > 1)
 				maxoccurs = 1;
 		}
-		// FIXME
-		// port.setValue(address);
+		port.setMaxDepth(maxdepth == null ? "unbounded" : maxdepth.toString());
+		port.setMinDepth(BigInteger.valueOf(mindepth));
+		port.setMaxOccurs(maxoccurs == null ? "unbounded" : maxoccurs
+				.toString());
+		port.setMinOccurs(BigInteger.valueOf(minoccurs));
+		List<PortAnnotation> pa = new ArrayList<>();
+		if (description) {
+			PortAnnotation ann = factory.createPortAnnotation();
+			ann.setValue(PortAnnotations.DESCRIPTION);
+			ann.setMinOccurs(BigInteger.ONE);
+			ann.setMaxOccurs("1");
+			pa.add(ann);
+		}
+		if (example) {
+			PortAnnotation ann = factory.createPortAnnotation();
+			ann.setValue(PortAnnotations.EXAMPLE);
+			ann.setMinOccurs(BigInteger.ONE);
+			ann.setMaxOccurs("1");
+			pa.add(ann);
+		}
+		port.getAnnotation().clear();
+		port.getAnnotation().addAll(pa);
+
+		// FIXME semantic annotations
 		return port;
 	}
 
-	public EditPortDialog(final ProfileCreator parent, String title,
+	public EditPortDialog(ProfileCreator parent, String title,
 			final EditPort callback) {
+		this(parent, title, callback, parent.factory.createPort());
+	}
+
+	protected EditPortDialog(final ProfileCreator parent, String title,
+			final EditPort callback, Port port) {
 		super(parent, title, true);
 		this.parent = parent;
+		this.factory = parent.factory;
 		Action okAction = new AbstractAction("OK") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				String name = EditPortDialog.this.name.getText().trim();
-				Integer minD = (Integer) ((SpinnerNumberModel) minDepth
-						.getModel()).getNumber();
-				Object maxD = ((SpinnerNumberModel) maxDepth.getModel())
-						.getValue();
-				Integer minO = (Integer) ((SpinnerNumberModel) minOccurs
-						.getModel()).getNumber();
-				Object maxO = ((SpinnerNumberModel) maxOccurs.getModel())
-						.getValue();
+				Integer minD = minDepth.getBoundValue();
+				Integer maxD = maxDepth.getBoundValue();
+				Integer minO = minOccurs.getBoundValue();
+				Integer maxO = maxOccurs.getBoundValue();
+				boolean description = mandateDescription.isSelected();
+				boolean example = mandateExample.isSelected();
 				// String address =
 				// EditPortDialog.this.address.getText().trim();
-				if (validateModel(name, minD,
-						(maxD instanceof Integer ? (Integer) maxD : null),
-						minO, (maxO instanceof Integer ? (Integer) maxO : null))) {
-					callback.edited(doUpdate(name, minD,
-							(maxD instanceof Integer ? (Integer) maxD : null),
-							minO, (maxO instanceof Integer ? (Integer) maxO
-									: null)));
+				if (validateModel(name, minD, maxD, minO, maxO, description,
+						example)) {
+					callback.edited(doUpdate(name, minD, maxD, minO, maxO,
+							description, example));
 					dispose();
 				}
 			}
@@ -122,26 +164,35 @@ public class EditPortDialog extends JDialog {
 				dispose();
 			}
 		};
-		port = parent.factory.createPort();
+		this.port = port;
 		GridPanel container;
 		setContentPane(container = new GridPanel(-1));
 		setLayout(new GridBagLayout());
 		name = container.add("Name:", new JTextField(30), 0);
 		container.add(new JSeparator(), 0, 1, 2);
-		PositiveUnboundedModel min, max;
-		minDepth = container.add("Min. Depth:", new JSpinner(
-				min = new PositiveUnboundedModel(false)), 2);
-		maxDepth = container.add("Max. Depth:", new JSpinner(
-				max = new PositiveUnboundedModel(true)), 3);
-		couple(min, max);
+		container.add("Min. Depth:", new JSpinner(
+				minDepth = new PositiveUnboundedModel(false)), 2);
+		container.add("Max. Depth:", new JSpinner(
+				maxDepth = new PositiveUnboundedModel(true)), 3);
+		couple(minDepth, maxDepth);
 		container.add(new JSeparator(), 0, 4, 2);
-		minOccurs = container.add("Min. Occurs:", new JSpinner(
-				min = new PositiveUnboundedModel(false)), 5);
-		maxOccurs = container.add("Max. Occurs:", new JSpinner(
-				max = new PositiveUnboundedModel(true)), 6);
-		couple(min, max);
+		container.add("Min. Occurs:", new JSpinner(
+				minOccurs = new PositiveUnboundedModel(false)), 5);
+		container.add("Max. Occurs:", new JSpinner(
+				maxOccurs = new PositiveUnboundedModel(true)), 6);
+		couple(minOccurs, maxOccurs);
 		container.add(new JSeparator(), 0, 7, 2);
-		JComponent jc = container.add(new JPanel(), 0, 8, 2);
+
+		JComponent jc = container.add("Std. Annotations:", new JPanel(), 8);
+		mandateDescription = new JCheckBox("Require Description");
+		mandateExample = new JCheckBox("Require Example");
+		jc.add(mandateDescription);
+		jc.add(mandateExample);
+		container.add(new JSeparator(), 0, 9, 2);
+
+		// FIXME semantic annotations
+
+		jc = container.add(new JPanel(), 0, 10, 2);
 		jc.add(new JButton(cancelAction));
 		JButton ok;
 		jc.add(ok = new JButton(okAction));
@@ -149,6 +200,7 @@ public class EditPortDialog extends JDialog {
 		getRootPane().setDefaultButton(ok);
 		getRootPane().registerKeyboardAction(cancelAction,
 				getKeyStroke(VK_ESCAPE, 0), WHEN_IN_FOCUSED_WINDOW);
+		install();
 		pack();
 	}
 
@@ -168,6 +220,50 @@ public class EditPortDialog extends JDialog {
 					min.setValue(max.getValue());
 			}
 		});
+	}
+
+	private void install() {
+		Object absentOccurs = "unbounded";
+		if (port.getName() != null) {
+			name.setText(port.getName());
+			absentOccurs = 1;
+		}
+
+		if (port.getMaxDepth() == null
+				|| port.getMaxDepth().equals("unbounded"))
+			maxDepth.setValue("unbounded");
+		else
+			maxDepth.setValue(Integer.parseInt(port.getMaxDepth()));
+		if (port.getMinDepth() == null)
+			minDepth.setValue(0);
+		else
+			minDepth.setValue(port.getMinDepth().intValue());
+
+		if (port.getMaxOccurs() == null)
+			maxOccurs.setValue(absentOccurs);
+		else if (port.getMaxOccurs().equals("unbounded"))
+			maxOccurs.setValue("unbounded");
+		else
+			maxOccurs.setValue(Integer.parseInt(port.getMaxOccurs()));
+		if (port.getMinOccurs() == null)
+			minOccurs.setValue(0);
+		else
+			minOccurs.setValue(port.getMinOccurs().intValue());
+
+		for (PortAnnotation pa : port.getAnnotation())
+			switch (pa.getValue()) {
+			case DESCRIPTION:
+				mandateDescription
+						.setSelected(pa.getMinOccurs().intValue() > 0);
+				break;
+			case EXAMPLE:
+				mandateExample.setSelected(pa.getMinOccurs().intValue() > 0);
+				break;
+			}
+
+		for (SemanticAnnotation sa : port.getSemanticAnnotation())
+			sa.getValue();// URI
+		// FIXME
 	}
 
 	public interface EditPort {
@@ -217,7 +313,7 @@ public class EditPortDialog extends JDialog {
 		@Override
 		public void setValue(Object value) {
 			boolean old = unbounded;
-			unbounded = value.equals("unbounded") && !unboundable;
+			unbounded = value.equals("unbounded") && unboundable;
 			if (!unbounded) {
 				in.setValue(value);
 				fireStateChanged();
