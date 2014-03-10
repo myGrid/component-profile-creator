@@ -61,6 +61,8 @@ import javax.xml.bind.JAXBException;
 import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
 import org.taverna.component.profile_creator.EditPortDialog.EditPort;
 import org.taverna.component.profile_creator.utils.GridPanel;
+import org.taverna.component.profile_creator.utils.OntologyCollection;
+import org.taverna.component.profile_creator.utils.OntologyCollection.OntologyCollectionException;
 
 import uk.org.taverna.ns._2012.component.profile.Component;
 import uk.org.taverna.ns._2012.component.profile.ComponentAnnotation;
@@ -74,6 +76,7 @@ import uk.org.taverna.ns._2012.component.profile.Profile;
 @SuppressWarnings("serial")
 public class ProfileCreator extends JFrame {
 	private final JAXBContext context;
+	final OntologyCollection ontologies;
 	final ObjectFactory factory;
 	private final JLabel id;
 	private final JTextField title, extend;
@@ -118,7 +121,9 @@ public class ProfileCreator extends JFrame {
 		}
 	}
 
-	private void addOntologyRow(Ontology ont) {
+	private void addOntologyRow(Ontology ont)
+			throws OntologyCollectionException {
+		ontologies.addOntology(ont);
 		final String id = ont.getId();
 		JButton jb = new JButton(new AbstractAction("Del") {
 			@Override
@@ -254,6 +259,7 @@ public class ProfileCreator extends JFrame {
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
 
 		context = JAXBContext.newInstance(Profile.class);
+		ontologies = new OntologyCollection();
 		factory = new ObjectFactory();
 		profile = createDefault(factory);
 
@@ -269,7 +275,11 @@ public class ProfileCreator extends JFrame {
 							return;
 					}
 				}
-				installProfile(null, createDefault(factory));
+				try {
+					installProfile(null, createDefault(factory));
+				} catch (OntologyCollectionException e1) {
+					// Should be unreachable
+				}
 			}
 
 			@Override
@@ -350,8 +360,15 @@ public class ProfileCreator extends JFrame {
 								"Duplicate Ontology", ERROR_MESSAGE);
 						return;
 					}
+				try {
+					addOntologyRow(ont);
+				} catch (OntologyCollectionException e) {
+					showMessageDialog(ProfileCreator.this,
+							"Problem when loading ontology: " + e.getMessage(),
+							"Bad Ontology Location", ERROR_MESSAGE);
+					return;
+				}
 				profile.getOntology().add(ont);
-				addOntologyRow(ont);
 				setModified(true);
 			}
 		};
@@ -534,10 +551,12 @@ public class ProfileCreator extends JFrame {
 				}
 			}
 		}
-		new ComponentAnnotationChangeListener(requireAuthor, ComponentAnnotations.AUTHOR);
+		new ComponentAnnotationChangeListener(requireAuthor,
+				ComponentAnnotations.AUTHOR);
 		new ComponentAnnotationChangeListener(requireDescription,
 				ComponentAnnotations.DESCRIPTION);
-		new ComponentAnnotationChangeListener(requireTitle, ComponentAnnotations.TITLE);
+		new ComponentAnnotationChangeListener(requireTitle,
+				ComponentAnnotations.TITLE);
 
 		pack();
 		validate();
@@ -560,11 +579,11 @@ public class ProfileCreator extends JFrame {
 			pc.loadFile(args[0]);
 	}
 
-	private void loadFile(String filename) throws IOException, JAXBException {
+	private void loadFile(String filename) throws IOException, JAXBException, OntologyCollectionException {
 		loadFile(new File(filename));
 	}
 
-	private void loadFile(File file) throws IOException, JAXBException {
+	private void loadFile(File file) throws IOException, JAXBException, OntologyCollectionException {
 		Profile p = (Profile) context.createUnmarshaller().unmarshal(file);
 		installProfile(file, p);
 	}
@@ -623,7 +642,7 @@ public class ProfileCreator extends JFrame {
 		setModified(false);
 	}
 
-	protected void installProfile(File f, Profile p) {
+	protected void installProfile(File f, Profile p) throws OntologyCollectionException {
 		id.setText(p.getId());
 		title.setText(p.getName());
 		description.setText(p.getDescription());

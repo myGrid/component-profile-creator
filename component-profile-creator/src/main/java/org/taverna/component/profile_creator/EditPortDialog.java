@@ -6,31 +6,46 @@ import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 
+import java.awt.Dimension;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.EventObject;
 import java.util.List;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.DefaultCellEditor;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.JSpinner;
+import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SpinnerListModel;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableColumn;
 
 import org.taverna.component.profile_creator.utils.GridPanel;
+import org.taverna.component.profile_creator.utils.OntologyCollection;
+import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
 
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Port;
@@ -53,12 +68,13 @@ public class EditPortDialog extends JDialog {
 	private final PositiveUnboundedModel minDepth, maxDepth, minOccurs,
 			maxOccurs;
 	private final JCheckBox mandateDescription, mandateExample;
+	private final DefaultTableModel annotations;
+	private final OntologyCollection ontosource;
 
 	/*
 	 * <semanticAnnotation class="http://purl.org/DP/components#PortType"
 	 * predicate="http://purl.org/DP/components#portType" ontology="components">
-	 * http://purl.org/DP/components#ParameterPort
-	 * </semanticAnnotation>
+	 * http://purl.org/DP/components#ParameterPort </semanticAnnotation>
 	 */
 
 	public boolean validateModel(String name, int mindepth, Integer maxdepth,
@@ -134,6 +150,7 @@ public class EditPortDialog extends JDialog {
 		super(parent, title, true);
 		this.parent = parent;
 		this.factory = parent.factory;
+		this.ontosource = parent.ontologies;
 		Action okAction = new AbstractAction("OK") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -186,9 +203,107 @@ public class EditPortDialog extends JDialog {
 		jc.add(mandateExample);
 		container.add(new JSeparator(), 0, 9, 2);
 
+		Action addSemanticAnnotation = new AbstractAction("Add Annotation") {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				// TODO Auto-generated method stub
+
+			}
+
+		};
+		annotations = new DefaultTableModel(new Object[][] {}, new Object[] {
+				"Annotation", "Required", "" });
+		JTable ann = container.add(addSemanticAnnotation, new JTable(
+				annotations), 10);
+		ann.setPreferredScrollableViewportSize(new Dimension(24, 48));
+		TableColumn column;
+		column = ann.getColumnModel().getColumn(0);
+		column.setCellRenderer(new DefaultTableCellRenderer() {
+			@Override
+		    public void setValue(Object value) {
+				super.setValue(((PossibleStatement) value).humanReadableForm);
+			}
+		});
+		JComboBox<PossibleStatement> statements = new JComboBox<>();
+		statements.setRenderer(new DefaultListCellRenderer(){
+			@Override
+			public JComponent getListCellRendererComponent(
+                    JList<?> list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus) {
+		        if (isSelected) {
+		            setBackground(list.getSelectionBackground());
+		            setForeground(list.getSelectionForeground());
+		        } else {
+		            setBackground(list.getBackground());
+		            setForeground(list.getForeground());
+		        }
+		        setText(((PossibleStatement) value).humanReadableForm);
+		        return this;
+			}
+		});
+		for (PossibleStatement ps : ontosource.getPossibleStatements())
+			statements.addItem(ps);
+		column.setCellEditor(new DefaultCellEditor(statements));
+		column = ann.getColumnModel().getColumn(1);
+		column.setMaxWidth(64);
+		// TODO cardinality range choice
+		column = ann.getColumnModel().getColumn(2);
+		column.setMaxWidth(new JButton("Del").getPreferredSize().width);
+		column.setCellRenderer(new TableCellRenderer() {
+			@Override
+			public JComponent getTableCellRendererComponent(JTable table,
+					Object value, boolean isSelected, boolean hasFocus,
+					int row, int column) {
+				return (JComponent) value;
+			}
+		});
+		column.setCellEditor(new TableCellEditor() {
+			@Override
+			public Object getCellEditorValue() {
+				return null;
+			}
+
+			@Override
+			public boolean isCellEditable(EventObject anEvent) {
+				return true;
+			}
+
+			@Override
+			public boolean shouldSelectCell(EventObject anEvent) {
+				return false;
+			}
+
+			@Override
+			public boolean stopCellEditing() {
+				return true;
+			}
+
+			@Override
+			public void cancelCellEditing() {
+			}
+
+			@Override
+			public void addCellEditorListener(CellEditorListener l) {
+			}
+
+			@Override
+			public void removeCellEditorListener(CellEditorListener l) {
+			}
+
+			@Override
+			public JComponent getTableCellEditorComponent(JTable table,
+					Object value, boolean isSelected, int row, int column) {
+				return (JComponent) value;
+			}
+		});
+		container.add(new JSeparator(), 0, 11, 2);
 		// FIXME semantic annotations
 
-		jc = container.add(new JPanel(), 0, 10, 2);
+		jc = container.add(new JPanel(), 0, 12, 2);
 		jc.add(new JButton(cancelAction));
 		JButton ok;
 		jc.add(ok = new JButton(okAction));
