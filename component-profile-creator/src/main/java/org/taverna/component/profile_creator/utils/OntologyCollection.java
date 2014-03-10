@@ -12,11 +12,14 @@ import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
@@ -27,6 +30,8 @@ import uk.org.taverna.ns._2012.component.profile.SemanticAnnotation;
 import com.hp.hpl.jena.ontology.Individual;
 import com.hp.hpl.jena.ontology.OntModel;
 import com.hp.hpl.jena.rdf.model.Property;
+import com.hp.hpl.jena.rdf.model.RDFNode;
+import com.hp.hpl.jena.rdf.model.Resource;
 import com.hp.hpl.jena.rdf.model.Statement;
 
 public class OntologyCollection {
@@ -51,7 +56,7 @@ public class OntologyCollection {
 		OntModel old, model = readOntologyFromURI(ont.getId(), ont.getValue());
 		onts.put(ont.getId(), ont);
 		old = models.put(ont.getId(), model);
-		possibles=generateTerms();
+		possibles = generateTerms();
 		pcs.firePropertyChange(ont.getId(), old, model);
 	}
 
@@ -59,7 +64,7 @@ public class OntologyCollection {
 		OntModel model = models.remove(ont.getId());
 		if (model != null) {
 			onts.remove(ont.getId());
-			possibles=generateTerms();
+			possibles = generateTerms();
 			pcs.firePropertyChange(ont.getId(), model, null);
 		}
 	}
@@ -68,15 +73,50 @@ public class OntologyCollection {
 		return unmodifiableList(possibles);
 	}
 
-	public static class PossibleStatement {
+	public class PossibleStatement implements Comparable<PossibleStatement> {
 		public final String ontologyId;
 		public final String humanReadableForm;
 		private final SemanticAnnotation annotation;
 
-		PossibleStatement(String id, String name, SemanticAnnotation sa) {
+		private String name(Resource res) {
+			if (res == null)
+				return "?";
+			Property altLabel = res.getModel().createProperty(
+					"http://www.w3.org/2004/02/skos/core#prefLabel");
+			for (Statement s : list(res.getModel().listStatements(res,
+					altLabel, (String) null)))
+				return s.getObject().asLiteral().toString();
+			return res.getLocalName();
+		}
+
+		PossibleStatement(String id, Resource predicate, Resource object,
+				SemanticAnnotation sa) {
 			ontologyId = id;
-			humanReadableForm = name;
+			humanReadableForm = String.format("%s: %s => %s", id,
+					name(predicate), name(object));
 			annotation = sa;
+		}
+
+		@Override
+		public int hashCode() {
+			return humanReadableForm.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (!(o instanceof PossibleStatement))
+				return false;
+			PossibleStatement ps = (PossibleStatement) o;
+			return annotation.getOntology().equals(ps.annotation.getOntology())
+					&& annotation.getPredicate().equals(
+							ps.annotation.getPredicate())
+					&& ((annotation.getClazz() == null && ps.annotation
+							.getClazz() == null) || (annotation.getClazz() != null
+							&& ps.annotation.getClazz() != null && annotation
+							.getClazz().equals(ps.annotation.getClazz())))
+					&& ((annotation.getValue() == null && ps.annotation
+							.getValue() == null) || (annotation != null && annotation
+							.getValue().equals(ps.annotation.getValue())));
 		}
 
 		public SemanticAnnotation getAnnotation() {
@@ -87,31 +127,80 @@ public class OntologyCollection {
 			sa.setValue(annotation.getValue());
 			return sa;
 		}
+
+		@Override
+		public int compareTo(PossibleStatement o) {
+			return humanReadableForm.compareTo(o.humanReadableForm);
+		}
+	}
+
+	private SemanticAnnotation sa(String ontology, RDFNode predicate) {
+		SemanticAnnotation sa = new SemanticAnnotation();
+		sa.setOntology(ontology);
+		sa.setPredicate(predicate.toString());
+		return sa;
+	}
+
+	private void initClass(SemanticAnnotation sa, RDFNode object) {
+		if (object instanceof Individual)
+			sa.setClazz(((Individual) object).getOntClass().getURI());
+	}
+
+	private boolean initValue(SemanticAnnotation sa, RDFNode object) {
+		if (object.isLiteral())
+			sa.setValue(object.asLiteral().getLexicalForm());
+		else if (object.isResource())
+			sa.setValue(object.asResource().getURI());
+		else
+			return false;
+		return true;
+	}
+
+	private <T> List<T> list(Iterator<T> iter) {
+		List<T> list = new ArrayList<>();
+		while (iter.hasNext())
+			list.add(iter.next());
+		return list;
 	}
 
 	private List<PossibleStatement> generateTerms() {
-		List<PossibleStatement> result = new ArrayList<>();
+		Set<String> predicates = new HashSet<>();
+		Set<PossibleStatement> added = new HashSet<>();
 		for (Entry<String, OntModel> entry : models.entrySet()) {
-			Iterator<Statement> it = entry.getValue().listStatements();
-			while (it.hasNext()) {
-				Statement s = it.next();
-				Property pred = s.getPredicate();
-				SemanticAnnotation sa = new SemanticAnnotation();
-				sa.setPredicate(pred.toString());
-				if (s.getObject() instanceof Individual)
-					sa.setClazz(((Individual) s.getObject()).getOntClass()
-							.getURI());
-				if (s.getObject().isLiteral())
-					sa.setValue(s.getObject().asLiteral().getLexicalForm());
-				else if (s.getObject().isResource())
-					sa.setValue(s.getObject().asResource().getURI());
-				else
-					continue;
-				result.add(new PossibleStatement(entry.getKey(), entry.getKey()
-						+ ": " + pred.getLocalName() + " => " + s.getObject(),
-						sa));
-			}
+			OntModel model = entry.getValue();
+			Property type = model
+					.createProperty("http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
+			Property range = model
+					.createProperty("http://www.w3.org/2000/01/rdf-schema#range");
+			Property objectProperty = model
+					.createProperty("http://www.w3.org/2002/07/owl#ObjectProperty");
+			for (Statement s : list(model.listStatements(null, type,
+					objectProperty)))
+				for (Statement rangeStatement : list(model.listStatements(
+						s.getSubject(), range, (RDFNode) null)))
+					if (!predicates.contains(rangeStatement.getSubject())) {
+						SemanticAnnotation sa = sa(entry.getKey(),
+								rangeStatement.getSubject());
+						initClass(sa, rangeStatement.getObject());
+						sa.setValue("");
+						added.add(new PossibleStatement(entry.getKey(),
+								rangeStatement.getSubject(), null, sa));
+						if (rangeStatement.getObject().isResource())
+							for (Individual st : list(model
+									.listIndividuals((Resource) rangeStatement
+											.getObject()))) {
+								sa = sa(entry.getKey(),
+										rangeStatement.getSubject());
+								initClass(sa, rangeStatement.getObject());
+								initValue(sa, st);
+								added.add(new PossibleStatement(entry.getKey(),
+										rangeStatement.getSubject(), st, sa));
+							}
+
+					}
 		}
+		List<PossibleStatement> result = new ArrayList<>(added);
+		Collections.sort(result);
 		return result;
 	}
 
@@ -146,4 +235,14 @@ public class OntologyCollection {
 		return model;
 	}
 
+	public static void main(String... strings)
+			throws OntologyCollectionException {
+		OntologyCollection oc = new OntologyCollection();
+		Ontology o = new Ontology();
+		o.setId("scape");
+		o.setValue("http://purl.org/DP/components");
+		oc.addOntology(o);
+		for (PossibleStatement ps : oc.getPossibleStatements())
+			System.out.println(ps.humanReadableForm);
+	}
 }
