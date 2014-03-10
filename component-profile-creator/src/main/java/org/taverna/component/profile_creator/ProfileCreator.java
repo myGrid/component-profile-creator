@@ -33,18 +33,22 @@ import java.util.UUID;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
+import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.event.CellEditorListener;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
@@ -59,6 +63,8 @@ import org.taverna.component.profile_creator.EditPortDialog.EditPort;
 import org.taverna.component.profile_creator.utils.GridPanel;
 
 import uk.org.taverna.ns._2012.component.profile.Component;
+import uk.org.taverna.ns._2012.component.profile.ComponentAnnotation;
+import uk.org.taverna.ns._2012.component.profile.ComponentAnnotations;
 import uk.org.taverna.ns._2012.component.profile.Extends;
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Ontology;
@@ -73,6 +79,7 @@ public class ProfileCreator extends JFrame {
 	private final JTextField title, extend;
 	private final JTextArea description;
 	private final DefaultTableModel ontologyList, inputs, outputs;
+	private final JCheckBox requireAuthor, requireDescription, requireTitle;
 	private File file;
 	private Profile profile;
 	private boolean modified;
@@ -420,13 +427,17 @@ public class ProfileCreator extends JFrame {
 		getContentPane().setLayout(new BorderLayout());
 		getContentPane().add(tabs = new JTabbedPane(), CENTER);
 		GridPanel panel;
-		tabs.add("Global", panel = new GridPanel(4));
+		tabs.add("Global", panel = new GridPanel(5));
 		setLayout(new GridBagLayout());
 		id = panel.add("ID:", new JLabel(profile.getId()), 0);
 		title = panel.add("Name:", new JTextField(), 1);
 		description = panel.add("Description:", new JTextArea(3, 40), 2);
 		extend = panel.add("Extends:", new JTextField(), 3);
-		JTable jt = panel.add(addOnt, defineTableList("Name", "Location"), 4);
+		JComponent jp = panel.add("Std. Annotations:", new JPanel(), 4);
+		jp.add(requireAuthor = new JCheckBox("Author"));
+		jp.add(requireDescription = new JCheckBox("Description"));
+		jp.add(requireTitle = new JCheckBox("Title"));
+		JTable jt = panel.add(addOnt, defineTableList("Name", "Location"), 5);
 		ontologyList = (DefaultTableModel) jt.getModel();
 		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
 		jt.getColumn("Location").setMinWidth(192);
@@ -491,6 +502,42 @@ public class ProfileCreator extends JFrame {
 				}
 			}
 		});
+		class ComponentAnnotationChangeListener implements ChangeListener {
+			private final JCheckBox listenTo;
+			private final ComponentAnnotations subject;
+
+			ComponentAnnotationChangeListener(JCheckBox checkbox,
+					ComponentAnnotations what) {
+				listenTo = checkbox;
+				subject = what;
+				listenTo.addChangeListener(this);
+			}
+
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				List<ComponentAnnotation> l = profile.getComponent()
+						.getAnnotation();
+				ComponentAnnotation anno = null;
+				for (ComponentAnnotation a : l) {
+					if (a.getValue().equals(subject)) {
+						if (listenTo.isSelected())
+							anno = a;
+						else
+							l.remove(a);
+						break;
+					}
+				}
+				if (listenTo.isSelected() && anno == null) {
+					anno = new ComponentAnnotation();
+					anno.setValue(subject);
+					l.add(anno);
+				}
+			}
+		}
+		new ComponentAnnotationChangeListener(requireAuthor, ComponentAnnotations.AUTHOR);
+		new ComponentAnnotationChangeListener(requireDescription,
+				ComponentAnnotations.DESCRIPTION);
+		new ComponentAnnotationChangeListener(requireTitle, ComponentAnnotations.TITLE);
 
 		pack();
 		validate();
@@ -592,8 +639,20 @@ public class ProfileCreator extends JFrame {
 		outputs.setRowCount(0);
 		for (Port port : comp.getOutputPort())
 			addPort(outputs, comp.getOutputPort(), port);
+		for (ComponentAnnotation o : comp.getAnnotation())
+			switch (o.getValue()) {
+			case AUTHOR:
+				requireAuthor.setSelected(true);
+				break;
+			case DESCRIPTION:
+				requireDescription.setSelected(true);
+				break;
+			case TITLE:
+				requireTitle.setSelected(true);
+				break;
+			}
 		// TODO activity
-		// TODO annotation, semantic annotation
+		// TODO semantic annotation
 		// TODO exception handling
 		file = f;
 		profile = p;
