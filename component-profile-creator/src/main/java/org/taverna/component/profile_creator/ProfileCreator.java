@@ -179,7 +179,7 @@ public class ProfileCreator extends JFrame {
 				}
 			}
 		});
-		// FIXME annotations
+		// FIXME display port annotations
 		table.addRow(new Object[] {
 				new Range(port.getMinOccurs(), port.getMaxOccurs()),
 				new Range(port.getMinDepth(), port.getMaxDepth()),
