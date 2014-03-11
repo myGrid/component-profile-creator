@@ -22,6 +22,16 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
+import javax.swing.DefaultCellEditor;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JList;
+import javax.swing.ListCellRenderer;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableCellRenderer;
+
 import org.apache.commons.io.IOUtils;
 
 import uk.org.taverna.ns._2012.component.profile.Ontology;
@@ -73,9 +83,19 @@ public class OntologyCollection {
 		return unmodifiableList(possibles);
 	}
 
+	public PossibleStatement getStatementFor(SemanticAnnotation sa) {
+		OntModel om = models.get(sa.getOntology());
+		if (om == null)
+			return null;// TODO throw exception?
+		Property p = om.createProperty(sa.getPredicate());
+		Resource r = sa.getValue().trim().isEmpty() ? null : om
+				.createResource(sa.getValue().trim());
+		return new PossibleStatement(sa.getOntology(), p, r, sa);
+	}
+
 	public class PossibleStatement implements Comparable<PossibleStatement> {
 		public final String ontologyId;
-		public final String humanReadableForm;
+		final String humanReadableForm;
 		private final SemanticAnnotation annotation;
 
 		private String name(Resource res) {
@@ -92,11 +112,16 @@ public class OntologyCollection {
 		PossibleStatement(String id, Resource predicate, Resource object,
 				SemanticAnnotation sa) {
 			ontologyId = id;
-			humanReadableForm = String.format("%s: %s => %s::%s", id,
+			humanReadableForm = String.format("%s: %s \u2192 %s\u2237%s", id,
 					name(predicate),
 					sa.getClazz() == null ? "null" : name(predicate.getModel()
 							.createResource(sa.getClazz())), name(object));
 			annotation = sa;
+		}
+
+		@Override
+		public String toString() {
+			return humanReadableForm;
 		}
 
 		@Override
@@ -239,6 +264,44 @@ public class OntologyCollection {
 			closeQuietly(in);
 		}
 		return model;
+	}
+
+	@SuppressWarnings("serial")
+	public TableCellRenderer tableRenderer() {
+		return new DefaultTableCellRenderer() {
+			@Override
+			public void setValue(Object value) {
+				super.setValue(((PossibleStatement) value).humanReadableForm);
+			}
+		};
+	}
+
+	@SuppressWarnings({ "serial" })
+	public ListCellRenderer<Object> listRenderer() {
+		return (ListCellRenderer<Object>) new DefaultListCellRenderer() {
+			@Override
+			public JComponent getListCellRendererComponent(JList<?> list,
+					Object value, int index, boolean isSelected,
+					boolean cellHasFocus) {
+				if (isSelected) {
+					setBackground(list.getSelectionBackground());
+					setForeground(list.getSelectionForeground());
+				} else {
+					setBackground(list.getBackground());
+					setForeground(list.getForeground());
+				}
+				setText(((PossibleStatement) value).humanReadableForm);
+				return this;
+			}
+		};
+	}
+
+	public TableCellEditor tableEditor() {
+		JComboBox<PossibleStatement> statements = new JComboBox<>();
+		statements.setRenderer(listRenderer());
+		for (PossibleStatement ps : getPossibleStatements())
+			statements.addItem(ps);
+		return new DefaultCellEditor(statements);
 	}
 
 	public static void main(String... strings)

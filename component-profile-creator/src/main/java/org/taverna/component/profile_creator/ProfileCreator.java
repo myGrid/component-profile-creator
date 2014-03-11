@@ -16,6 +16,7 @@ import static javax.swing.JOptionPane.YES_OPTION;
 import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
+import static org.taverna.component.profile_creator.utils.TableUtils.installDelegatingColumn;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -26,7 +27,6 @@ import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.EventObject;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,15 +46,11 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellEditor;
-import javax.swing.table.TableCellRenderer;
-import javax.swing.table.TableColumn;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 
@@ -202,55 +198,7 @@ public class ProfileCreator extends JFrame {
 				return y == (realColumns.length - 1);
 			}
 		});
-		TableColumn bcol = jt.getColumn("");
-		bcol.setMaxWidth(new JButton("Del").getPreferredSize().width);
-		bcol.setCellRenderer(new TableCellRenderer() {
-			@Override
-			public JComponent getTableCellRendererComponent(JTable table,
-					Object value, boolean isSelected, boolean hasFocus,
-					int row, int column) {
-				return (JComponent) value;
-			}
-		});
-		bcol.setCellEditor(new TableCellEditor() {
-			@Override
-			public Object getCellEditorValue() {
-				return null;
-			}
-
-			@Override
-			public boolean isCellEditable(EventObject anEvent) {
-				return true;
-			}
-
-			@Override
-			public boolean shouldSelectCell(EventObject anEvent) {
-				return false;
-			}
-
-			@Override
-			public boolean stopCellEditing() {
-				return true;
-			}
-
-			@Override
-			public void cancelCellEditing() {
-			}
-
-			@Override
-			public void addCellEditorListener(CellEditorListener l) {
-			}
-
-			@Override
-			public void removeCellEditorListener(CellEditorListener l) {
-			}
-
-			@Override
-			public JComponent getTableCellEditorComponent(JTable table,
-					Object value, boolean isSelected, int row, int column) {
-				return (JComponent) value;
-			}
-		});
+		installDelegatingColumn(jt.getColumn(""), "Del");
 		return jt;
 	}
 
@@ -569,6 +517,7 @@ public class ProfileCreator extends JFrame {
 		def.setId(UUID.randomUUID().toString());
 		def.setName("");
 		def.setDescription("");
+		def.setComponent(factory.createComponent());
 		return def;
 	}
 
