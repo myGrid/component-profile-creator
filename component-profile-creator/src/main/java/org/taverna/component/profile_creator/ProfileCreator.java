@@ -16,6 +16,7 @@ import static javax.swing.JOptionPane.YES_OPTION;
 import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
+import static org.slf4j.LoggerFactory.getLogger;
 import static org.taverna.component.profile_creator.utils.TableUtils.installDelegatingColumn;
 
 import java.awt.BorderLayout;
@@ -53,13 +54,17 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
+import javax.xml.ws.Holder;
 
 import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
 import org.taverna.component.profile_creator.EditPortDialog.EditPort;
 import org.taverna.component.profile_creator.utils.GridPanel;
 import org.taverna.component.profile_creator.utils.OntologyCollection;
 import org.taverna.component.profile_creator.utils.OntologyCollection.OntologyCollectionException;
+import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
 
+import uk.org.taverna.ns._2012.component.profile.ActivityAnnotation;
+import uk.org.taverna.ns._2012.component.profile.BasicAnnotations;
 import uk.org.taverna.ns._2012.component.profile.Component;
 import uk.org.taverna.ns._2012.component.profile.ComponentAnnotation;
 import uk.org.taverna.ns._2012.component.profile.ComponentAnnotations;
@@ -67,7 +72,9 @@ import uk.org.taverna.ns._2012.component.profile.Extends;
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Ontology;
 import uk.org.taverna.ns._2012.component.profile.Port;
+import uk.org.taverna.ns._2012.component.profile.PortAnnotation;
 import uk.org.taverna.ns._2012.component.profile.Profile;
+import uk.org.taverna.ns._2012.component.profile.SemanticAnnotation;
 
 @SuppressWarnings("serial")
 public class ProfileCreator extends JFrame {
@@ -78,6 +85,7 @@ public class ProfileCreator extends JFrame {
 	private final JTextField title, extend;
 	private final JTextArea description;
 	private final DefaultTableModel ontologyList, inputs, outputs;
+	private final JTable inputTable, outputTable;
 	private final JCheckBox requireAuthor, requireDescription, requireTitle;
 	private File file;
 	private Profile profile;
@@ -139,7 +147,7 @@ public class ProfileCreator extends JFrame {
 		ontologyList.addRow(new Object[] { ont.getId(), ont.getValue(), jb });
 	}
 
-	private void addPort(final DefaultTableModel table,
+	private void addPort(JTable realTable, final DefaultTableModel table,
 			final List<Port> portCollection, final Port port) {
 		class Range {
 			int from;
@@ -180,14 +188,52 @@ public class ProfileCreator extends JFrame {
 				}
 			}
 		});
-		// FIXME display port annotations
+		portCollection.add(port);
+		Holder<Integer> numLines = new Holder<>(0);
+		String annDisplay = getAnnotationsForDisplay(port.getAnnotation(),
+				port.getSemanticAnnotation(), numLines);
 		table.addRow(new Object[] {
 				new Range(port.getMinOccurs(), port.getMaxOccurs()),
 				new Range(port.getMinDepth(), port.getMaxDepth()),
-				port.getName() == null ? "" : port.getName(), "", jb });
+				port.getName() == null ? "" : port.getName(), annDisplay, jb });
+		if (numLines.value > 1) {
+			realTable.setRowHeight(realTable.getRowCount() - 1, numLines.value
+					* realTable.getRowHeight());
+		}
 	}
 
-	private JTable defineTableList(Object... columns) {
+	private String getAnnotationsForDisplay(List<?> annotations,
+			List<SemanticAnnotation> semanticAnnotations,
+			Holder<Integer> numLines) {
+		StringBuilder sb = new StringBuilder(
+				"<html><p style=\"white-space:nowrap\">");
+		String sep = "";
+		for (Object obj : annotations) {
+			BasicAnnotations annType;
+			if (obj instanceof PortAnnotation) {
+				annType = ((PortAnnotation) obj).getValue().value();
+			} else if (obj instanceof ComponentAnnotation) {
+				annType = ((ComponentAnnotation) obj).getValue().value();
+			} else if (obj instanceof ActivityAnnotation) {
+				annType = ((ActivityAnnotation) obj).getValue().value();
+			} else {
+				getLogger(getClass()).warn("unhandled type " + obj.getClass());
+				continue;
+			}
+			sb.append(sep).append("Needs ").append(annType.value());
+			numLines.value++;
+			sep = "<br>";
+		}
+		for (SemanticAnnotation sa : semanticAnnotations) {
+			PossibleStatement ps = ontologies.getStatementFor(sa);
+			sb.append(sep).append(ps);
+			numLines.value++;
+			sep = "<br>";
+		}
+		return sb.toString();
+	}
+
+	private JTable defineTableList(final Class<?>[] classes, Object... columns) {
 		final Object[] realColumns = new Object[columns.length + 1];
 		System.arraycopy(columns, 0, realColumns, 0, columns.length);
 		realColumns[columns.length] = "";
@@ -196,6 +242,14 @@ public class ProfileCreator extends JFrame {
 			@Override
 			public boolean isCellEditable(int x, int y) {
 				return y == (realColumns.length - 1);
+			}
+
+			@Override
+			public Class<?> getColumnClass(int col) {
+				if (classes == null || col >= classes.length
+						|| classes[col] == null)
+					return Object.class;
+				return classes[col];
 			}
 		});
 		installDelegatingColumn(jt.getColumn(""), "Del");
@@ -207,8 +261,8 @@ public class ProfileCreator extends JFrame {
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
 
 		context = JAXBContext.newInstance(Profile.class);
-		ontologies = new OntologyCollection();
 		factory = new ObjectFactory();
+		ontologies = new OntologyCollection(factory);
 		profile = createDefault(factory);
 
 		Action newAction = new WatchingAction("New", VK_N) {
@@ -344,7 +398,8 @@ public class ProfileCreator extends JFrame {
 									ERROR_MESSAGE);
 							return;
 						}
-				profile.getComponent().getInputPort().add(port);
+				addPort(inputTable, inputs, profile.getComponent()
+						.getInputPort(), port);
 				setModified(true);
 			}
 		};
@@ -372,7 +427,8 @@ public class ProfileCreator extends JFrame {
 									ERROR_MESSAGE);
 							return;
 						}
-				profile.getComponent().getOutputPort().add(port);
+				addPort(outputTable, outputs, profile.getComponent()
+						.getOutputPort(), port);
 				setModified(true);
 			}
 		};
@@ -402,21 +458,26 @@ public class ProfileCreator extends JFrame {
 		jp.add(requireAuthor = new JCheckBox("Author"));
 		jp.add(requireDescription = new JCheckBox("Description"));
 		jp.add(requireTitle = new JCheckBox("Title"));
-		JTable jt = panel.add(addOnt, defineTableList("Name", "Location"), 5);
+		JTable jt = panel.add(addOnt,
+				defineTableList(null, "Name", "Location"), 5);
 		ontologyList = (DefaultTableModel) jt.getModel();
 		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
 		jt.getColumn("Location").setMinWidth(192);
 
 		tabs.add("Inputs", panel = new GridPanel(0));
-		jt = panel.add(addInput,
-				defineTableList("Cardinality", "Depth", "Name", "Annotations"),
-				0);
+		inputTable = jt = panel.add(
+				addInput,
+				defineTableList(
+						new Class<?>[] { null, null, null, String.class },
+						"Cardinality", "Depth", "Name", "Annotations"), 0);
 		inputs = (DefaultTableModel) jt.getModel();
 
 		tabs.add("Outputs", panel = new GridPanel(0));
-		jt = panel.add(addOutput,
-				defineTableList("Cardinality", "Depth", "Name", "Annotations"),
-				0);
+		outputTable = jt = panel.add(
+				addOutput,
+				defineTableList(
+						new Class<?>[] { null, null, null, String.class },
+						"Cardinality", "Depth", "Name", "Annotations"), 0);
 		outputs = (DefaultTableModel) jt.getModel();
 
 		tabs.add("Activities", panel = new GridPanel(0));
@@ -528,11 +589,13 @@ public class ProfileCreator extends JFrame {
 			pc.loadFile(args[0]);
 	}
 
-	private void loadFile(String filename) throws IOException, JAXBException, OntologyCollectionException {
+	private void loadFile(String filename) throws IOException, JAXBException,
+			OntologyCollectionException {
 		loadFile(new File(filename));
 	}
 
-	private void loadFile(File file) throws IOException, JAXBException, OntologyCollectionException {
+	private void loadFile(File file) throws IOException, JAXBException,
+			OntologyCollectionException {
 		Profile p = (Profile) context.createUnmarshaller().unmarshal(file);
 		installProfile(file, p);
 	}
@@ -591,7 +654,8 @@ public class ProfileCreator extends JFrame {
 		setModified(false);
 	}
 
-	protected void installProfile(File f, Profile p) throws OntologyCollectionException {
+	protected void installProfile(File f, Profile p)
+			throws OntologyCollectionException {
 		id.setText(p.getId());
 		title.setText(p.getName());
 		description.setText(p.getDescription());
@@ -603,10 +667,10 @@ public class ProfileCreator extends JFrame {
 		Component comp = p.getComponent();
 		inputs.setRowCount(0);
 		for (Port port : comp.getInputPort())
-			addPort(inputs, comp.getInputPort(), port);
+			addPort(inputTable, inputs, comp.getInputPort(), port);
 		outputs.setRowCount(0);
 		for (Port port : comp.getOutputPort())
-			addPort(outputs, comp.getOutputPort(), port);
+			addPort(outputTable, outputs, comp.getOutputPort(), port);
 		for (ComponentAnnotation o : comp.getAnnotation())
 			switch (o.getValue()) {
 			case AUTHOR:

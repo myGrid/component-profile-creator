@@ -34,6 +34,7 @@ import javax.swing.table.TableCellRenderer;
 
 import org.apache.commons.io.IOUtils;
 
+import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Ontology;
 import uk.org.taverna.ns._2012.component.profile.SemanticAnnotation;
 
@@ -45,12 +46,14 @@ import com.hp.hpl.jena.rdf.model.Resource;
 import com.hp.hpl.jena.rdf.model.Statement;
 
 public class OntologyCollection {
+	private final ObjectFactory factory;
 	private final PropertyChangeSupport pcs;
 	Map<String, Ontology> onts = new HashMap<>();
 	Map<String, OntModel> models = new TreeMap<>();
 	private List<PossibleStatement> possibles = new ArrayList<>();
 
-	public OntologyCollection() {
+	public OntologyCollection(ObjectFactory factory) {
+		this.factory = factory;
 		pcs = new PropertyChangeSupport(this);
 	}
 
@@ -147,11 +150,18 @@ public class OntologyCollection {
 		}
 
 		public SemanticAnnotation getAnnotation() {
-			SemanticAnnotation sa = new SemanticAnnotation();
+			SemanticAnnotation sa = factory.createSemanticAnnotation();
 			sa.setClazz(annotation.getClazz());
 			sa.setOntology(ontologyId);
-			sa.setPredicate(annotation.getOntology());
+			sa.setPredicate(annotation.getPredicate());
 			sa.setValue(annotation.getValue());
+			return sa;
+		}
+
+		public SemanticAnnotation getAnnotation(Cardinality cardinality) {
+			SemanticAnnotation sa = getAnnotation();
+			sa.setMinOccurs(cardinality.getLowerBound());
+			sa.setMaxOccurs(cardinality.getUpperBound());
 			return sa;
 		}
 
@@ -162,7 +172,7 @@ public class OntologyCollection {
 	}
 
 	private SemanticAnnotation sa(String ontology, RDFNode predicate) {
-		SemanticAnnotation sa = new SemanticAnnotation();
+		SemanticAnnotation sa = factory.createSemanticAnnotation();
 		sa.setOntology(ontology);
 		sa.setPredicate(predicate.toString());
 		return sa;
@@ -306,7 +316,7 @@ public class OntologyCollection {
 
 	public static void main(String... strings)
 			throws OntologyCollectionException {
-		OntologyCollection oc = new OntologyCollection();
+		OntologyCollection oc = new OntologyCollection(new ObjectFactory());
 		Ontology o = new Ontology();
 		o.setId("scape");
 		o.setValue("http://purl.org/DP/components");

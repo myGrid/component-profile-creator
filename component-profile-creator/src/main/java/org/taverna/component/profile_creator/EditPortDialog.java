@@ -6,16 +6,16 @@ import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static org.taverna.component.profile_creator.utils.Cardinality.OPTIONAL;
+import static org.taverna.component.profile_creator.utils.TableUtils.configureColumn;
 import static org.taverna.component.profile_creator.utils.TableUtils.installDelegatingColumn;
 
 import java.awt.Dimension;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.math.BigInteger;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Vector;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -34,11 +34,12 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableColumn;
 
 import org.taverna.component.profile_creator.utils.Cardinality;
 import org.taverna.component.profile_creator.utils.GridPanel;
 import org.taverna.component.profile_creator.utils.OntologyCollection;
+import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
+import org.taverna.component.profile_creator.utils.TableUtils.RowDeletionAction;
 
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Port;
@@ -72,7 +73,8 @@ public class EditPortDialog extends JDialog {
 	 */
 
 	public boolean validateModel(String name, int mindepth, Integer maxdepth,
-			int minoccurs, Integer maxoccurs, boolean b, boolean c) {
+			int minoccurs, Integer maxoccurs,
+			List<SemanticAnnotation> semanticAnnotations) {
 		if (!name.isEmpty() && !name.matches("^[a-zA-Z]\\w*$")) {
 			showMessageDialog(parent,
 					"Name must be a simple word, if specified.", "Bad Format",
@@ -89,21 +91,20 @@ public class EditPortDialog extends JDialog {
 					"Bad Occurence Count", ERROR_MESSAGE);
 			return false;
 		}
-		// FIXME semantic annotations
-		try {
-			new URI("address");
-			// Don't need the value!
-			// TODO Check if the URL actually refers to an ontology?
-		} catch (URISyntaxException ex) {
-			showMessageDialog(parent, ex.getMessage(), "Bad Address",
-					ERROR_MESSAGE);
-			return false;
-		}
+		for (SemanticAnnotation sa : semanticAnnotations)
+			if (ontosource.getStatementFor(sa) == null) {
+				showMessageDialog(
+						parent,
+						"Could not double check the construction of the semantic annotation.",
+						"Illegal Semantic Annotation", ERROR_MESSAGE);
+				return false;
+			}
 		return true;
 	}
 
 	Port doUpdate(String name, int mindepth, Integer maxdepth, int minoccurs,
-			Integer maxoccurs, boolean description, boolean example) {
+			Integer maxoccurs, boolean description, boolean example,
+			List<SemanticAnnotation> semanticAnnotations) {
 		if (name.isEmpty())
 			port.setName(null);
 		else {
@@ -130,13 +131,18 @@ public class EditPortDialog extends JDialog {
 		port.getAnnotation().clear();
 		port.getAnnotation().addAll(pa);
 
-		// FIXME semantic annotations
+		port.getSemanticAnnotation().clear();
+		port.getSemanticAnnotation().addAll(semanticAnnotations);
 		return port;
 	}
 
 	public EditPortDialog(ProfileCreator parent, String title,
 			final EditPort callback) {
-		this(parent, title, callback, parent.factory.createPort());
+		this(parent, title, callback, makeDefaultPort(parent.factory));
+	}
+
+	private static Port makeDefaultPort(ObjectFactory factory) {
+		return factory.createPort();
 	}
 
 	protected EditPortDialog(final ProfileCreator parent, String title,
@@ -146,6 +152,7 @@ public class EditPortDialog extends JDialog {
 		this.factory = parent.factory;
 		this.ontosource = parent.ontologies;
 		Action okAction = new AbstractAction("OK") {
+			@SuppressWarnings("unchecked")
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				String name = EditPortDialog.this.name.getText().trim();
@@ -155,12 +162,15 @@ public class EditPortDialog extends JDialog {
 				Integer maxO = maxOccurs.getBoundValue();
 				boolean description = mandateDescription.isSelected();
 				boolean example = mandateExample.isSelected();
-				// String address =
-				// EditPortDialog.this.address.getText().trim();
-				if (validateModel(name, minD, maxD, minO, maxO, description,
-						example)) {
+				List<SemanticAnnotation> semanticAnnotations = new ArrayList<>();
+				for (Vector<?> row : (Vector<Vector<?>>) annotations
+						.getDataVector())
+					semanticAnnotations.add(((PossibleStatement) row.get(0))
+							.getAnnotation((Cardinality) row.get(1)));
+				if (validateModel(name, minD, maxD, minO, maxO,
+						semanticAnnotations)) {
 					callback.edited(doUpdate(name, minD, maxD, minO, maxO,
-							description, example));
+							description, example, semanticAnnotations));
 					dispose();
 				}
 			}
@@ -215,27 +225,16 @@ public class EditPortDialog extends JDialog {
 			addSemanticAnnotation.setEnabled(false);
 		annotations = new DefaultTableModel(new Object[0][], new Object[] {
 				"Annotation", "Cardinality", "" });
-		final JTable ann = container.add(addSemanticAnnotation, new JTable(
+		JTable ann = container.add(addSemanticAnnotation, new JTable(
 				annotations), 10);
-		deleteRowAction = new AbstractAction("Del") {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				annotations.removeRow(ann.getSelectedRow());
-			}
-		};
+		deleteRowAction = new RowDeletionAction(ann);
 		ann.setPreferredScrollableViewportSize(new Dimension(24, 48));
-		TableColumn column;
-		column = ann.getColumnModel().getColumn(0);
-		column.setCellRenderer(ontosource.tableRenderer());
-		column.setCellEditor(ontosource.tableEditor());
-		column = ann.getColumnModel().getColumn(1);
-		column.setMaxWidth(64);
-		column.setCellRenderer(Cardinality.tableRenderer());
-		column.setCellEditor(Cardinality.tableEditor());
+		configureColumn(ann, 0, null, ontosource.tableRenderer(),
+				ontosource.tableEditor());
+		configureColumn(ann, 1, 64, Cardinality.tableRenderer(),
+				Cardinality.tableEditor());
 		installDelegatingColumn(ann.getColumnModel().getColumn(2), "Del");
 		container.add(new JSeparator(), 0, 11, 2);
-		// FIXME semantic annotations
-
 		jc = container.add(new JPanel(), 0, 12, 2);
 		jc.add(new JButton(cancelAction));
 		JButton ok;
@@ -306,8 +305,9 @@ public class EditPortDialog extends JDialog {
 			}
 
 		for (SemanticAnnotation sa : port.getSemanticAnnotation())
-			sa.getValue();// URI
-		// FIXME
+			annotations.addRow(new Object[] { ontosource.getStatementFor(sa),
+					Cardinality.get(sa.getMinOccurs(), sa.getMaxOccurs()),
+					new JButton(deleteRowAction) });
 	}
 
 	public interface EditPort {
