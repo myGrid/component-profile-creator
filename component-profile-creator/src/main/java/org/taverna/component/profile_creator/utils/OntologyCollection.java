@@ -92,8 +92,10 @@ public class OntologyCollection {
 		PossibleStatement(String id, Resource predicate, Resource object,
 				SemanticAnnotation sa) {
 			ontologyId = id;
-			humanReadableForm = String.format("%s: %s => %s", id,
-					name(predicate), name(object));
+			humanReadableForm = String.format("%s: %s => %s::%s", id,
+					name(predicate),
+					sa.getClazz() == null ? "null" : name(predicate.getModel()
+							.createResource(sa.getClazz())), name(object));
 			annotation = sa;
 		}
 
@@ -142,8 +144,12 @@ public class OntologyCollection {
 	}
 
 	private void initClass(SemanticAnnotation sa, RDFNode object) {
+		if (object == null)
+			return;
 		if (object instanceof Individual)
 			sa.setClazz(((Individual) object).getOntClass().getURI());
+		else if (object.isResource())
+			sa.setClazz(object.asResource().getURI());
 	}
 
 	private boolean initValue(SemanticAnnotation sa, RDFNode object) {
