@@ -196,10 +196,9 @@ public class ProfileCreator extends JFrame {
 				new Range(port.getMinOccurs(), port.getMaxOccurs()),
 				new Range(port.getMinDepth(), port.getMaxDepth()),
 				port.getName() == null ? "" : port.getName(), annDisplay, jb });
-		if (numLines.value > 1) {
+		if (numLines.value > 1)
 			realTable.setRowHeight(realTable.getRowCount() - 1, numLines.value
 					* realTable.getRowHeight());
-		}
 	}
 
 	private String getAnnotationsForDisplay(List<?> annotations,

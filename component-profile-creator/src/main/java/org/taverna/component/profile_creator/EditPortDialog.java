@@ -1,16 +1,11 @@
 package org.taverna.component.profile_creator;
 
-import static java.awt.event.KeyEvent.VK_ESCAPE;
-import static javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW;
-import static javax.swing.JOptionPane.ERROR_MESSAGE;
-import static javax.swing.JOptionPane.showMessageDialog;
-import static javax.swing.KeyStroke.getKeyStroke;
 import static org.taverna.component.profile_creator.utils.Cardinality.OPTIONAL;
+import static org.taverna.component.profile_creator.utils.PositiveUnboundedModel.couple;
 import static org.taverna.component.profile_creator.utils.TableUtils.configureColumn;
 import static org.taverna.component.profile_creator.utils.TableUtils.installDelegatingColumn;
 
 import java.awt.Dimension;
-import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -22,23 +17,18 @@ import javax.swing.Action;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
-import javax.swing.JDialog;
-import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.JTextField;
-import javax.swing.SpinnerListModel;
-import javax.swing.SpinnerNumberModel;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
 import javax.swing.table.DefaultTableModel;
 
 import org.taverna.component.profile_creator.utils.Cardinality;
-import org.taverna.component.profile_creator.utils.GridPanel;
+import org.taverna.component.profile_creator.utils.GridDialog;
 import org.taverna.component.profile_creator.utils.OntologyCollection;
 import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
+import org.taverna.component.profile_creator.utils.PositiveUnboundedModel;
 import org.taverna.component.profile_creator.utils.TableUtils.RowDeletionAction;
 
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
@@ -54,8 +44,7 @@ import uk.org.taverna.ns._2012.component.profile.SemanticAnnotation;
  * @author Donal Fellows
  */
 @SuppressWarnings("serial")
-public class EditPortDialog extends JDialog {
-	private final JFrame parent;
+public class EditPortDialog extends GridDialog {
 	private final ObjectFactory factory;
 	private Port port;
 	private final JTextField name;
@@ -65,6 +54,7 @@ public class EditPortDialog extends JDialog {
 	private final DefaultTableModel annotations;
 	private final OntologyCollection ontosource;
 	private Action deleteRowAction;
+	private EditPort callback;
 
 	/*
 	 * <semanticAnnotation class="http://purl.org/DP/components#PortType"
@@ -76,27 +66,22 @@ public class EditPortDialog extends JDialog {
 			int minoccurs, Integer maxoccurs,
 			List<SemanticAnnotation> semanticAnnotations) {
 		if (!name.isEmpty() && !name.matches("^[a-zA-Z]\\w*$")) {
-			showMessageDialog(parent,
-					"Name must be a simple word, if specified.", "Bad Format",
-					ERROR_MESSAGE);
+			errorDialog("Name must be a simple word, if specified.",
+					"Bad Format");
 			return false;
 		}
 		if (maxdepth != null && mindepth > maxdepth) {
-			showMessageDialog(parent, "Depth range must be sane.",
-					"Bad Port Depth", ERROR_MESSAGE);
+			errorDialog("Depth range must be sane.", "Bad Port Depth");
 			return false;
 		}
 		if (maxoccurs != null && minoccurs > maxoccurs) {
-			showMessageDialog(parent, "Occurrence range must be sane.",
-					"Bad Occurence Count", ERROR_MESSAGE);
+			errorDialog("Occurrence range must be sane.", "Bad Occurence Count");
 			return false;
 		}
 		for (SemanticAnnotation sa : semanticAnnotations)
 			if (ontosource.getStatementFor(sa) == null) {
-				showMessageDialog(
-						parent,
-						"Could not double check the construction of the semantic annotation.",
-						"Illegal Semantic Annotation", ERROR_MESSAGE);
+				errorDialog("Could not double check the construction of the "
+						+ "semantic annotation.", "Illegal Semantic Annotation");
 				return false;
 			}
 		return true;
@@ -145,46 +130,34 @@ public class EditPortDialog extends JDialog {
 		return factory.createPort();
 	}
 
-	protected EditPortDialog(final ProfileCreator parent, String title,
-			final EditPort callback, Port port) {
+	@Override
+	@SuppressWarnings("unchecked")
+	protected void userAccepted() {
+		String name = this.name.getText().trim();
+		Integer minD = minDepth.getBoundValue();
+		Integer maxD = maxDepth.getBoundValue();
+		Integer minO = minOccurs.getBoundValue();
+		Integer maxO = maxOccurs.getBoundValue();
+		boolean description = mandateDescription.isSelected();
+		boolean example = mandateExample.isSelected();
+		List<SemanticAnnotation> semanticAnnotations = new ArrayList<>();
+		for (Vector<?> row : (Vector<Vector<?>>) annotations.getDataVector())
+			semanticAnnotations.add(((PossibleStatement) row.get(0))
+					.getAnnotation((Cardinality) row.get(1)));
+		if (validateModel(name, minD, maxD, minO, maxO, semanticAnnotations)) {
+			callback.edited(doUpdate(name, minD, maxD, minO, maxO, description,
+					example, semanticAnnotations));
+			dispose();
+		}
+	}
+
+	protected EditPortDialog(ProfileCreator parent, String title,
+			EditPort callback, Port port) {
 		super(parent, title, true);
-		this.parent = parent;
+		this.callback = callback;
 		this.factory = parent.factory;
 		this.ontosource = parent.ontologies;
-		Action okAction = new AbstractAction("OK") {
-			@SuppressWarnings("unchecked")
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				String name = EditPortDialog.this.name.getText().trim();
-				Integer minD = minDepth.getBoundValue();
-				Integer maxD = maxDepth.getBoundValue();
-				Integer minO = minOccurs.getBoundValue();
-				Integer maxO = maxOccurs.getBoundValue();
-				boolean description = mandateDescription.isSelected();
-				boolean example = mandateExample.isSelected();
-				List<SemanticAnnotation> semanticAnnotations = new ArrayList<>();
-				for (Vector<?> row : (Vector<Vector<?>>) annotations
-						.getDataVector())
-					semanticAnnotations.add(((PossibleStatement) row.get(0))
-							.getAnnotation((Cardinality) row.get(1)));
-				if (validateModel(name, minD, maxD, minO, maxO,
-						semanticAnnotations)) {
-					callback.edited(doUpdate(name, minD, maxD, minO, maxO,
-							description, example, semanticAnnotations));
-					dispose();
-				}
-			}
-		};
-		Action cancelAction = new AbstractAction("Cancel") {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				dispose();
-			}
-		};
 		this.port = port;
-		GridPanel container;
-		setContentPane(container = new GridPanel(-1));
-		setLayout(new GridBagLayout());
 		name = container.add("Name:", new JTextField(30), 0);
 		container.add(new JSeparator(), 0, 1, 2);
 		container.add("Min. Depth:", new JSpinner(
@@ -211,10 +184,8 @@ public class EditPortDialog extends JDialog {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (ontosource.getPossibleStatements().isEmpty())
-					showMessageDialog(
-							parent,
-							"No ontologies imported, so no annotations are available.",
-							"No Legal Annotations", ERROR_MESSAGE);
+					errorDialog("No ontologies imported, so no annotations "
+							+ "are available.", "No Legal Annotations");
 				else
 					annotations.addRow(new Object[] {
 							ontosource.getPossibleStatements().get(0),
@@ -235,34 +206,9 @@ public class EditPortDialog extends JDialog {
 				Cardinality.tableEditor());
 		installDelegatingColumn(ann.getColumnModel().getColumn(2), "Del");
 		container.add(new JSeparator(), 0, 11, 2);
-		jc = container.add(new JPanel(), 0, 12, 2);
-		jc.add(new JButton(cancelAction));
-		JButton ok;
-		jc.add(ok = new JButton(okAction));
-		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-		getRootPane().setDefaultButton(ok);
-		getRootPane().registerKeyboardAction(cancelAction,
-				getKeyStroke(VK_ESCAPE, 0), WHEN_IN_FOCUSED_WINDOW);
+		container.add(okCancelPanel(), 0, 12, 2);
 		install();
 		pack();
-	}
-
-	private void couple(final PositiveUnboundedModel min,
-			final PositiveUnboundedModel max) {
-		min.addChangeListener(new ChangeListener() {
-			@Override
-			public void stateChanged(ChangeEvent e) {
-				if (min.compareTo(max) > 0)
-					max.setValue(min.getValue());
-			}
-		});
-		max.addChangeListener(new ChangeListener() {
-			@Override
-			public void stateChanged(ChangeEvent e) {
-				if (max.compareTo(min) < 0)
-					min.setValue(max.getValue());
-			}
-		});
 	}
 
 	private void install() {
@@ -312,67 +258,5 @@ public class EditPortDialog extends JDialog {
 
 	public interface EditPort {
 		void edited(Port ont);
-	}
-
-	private class PositiveUnboundedModel extends SpinnerListModel implements
-			Comparable<PositiveUnboundedModel> {
-		private boolean unbounded, unboundable;
-		private SpinnerNumberModel in;
-
-		PositiveUnboundedModel(boolean mayBeUnbounded) {
-			in = new SpinnerNumberModel(0, 0, null, 1);
-			unbounded = unboundable = mayBeUnbounded;
-		}
-
-		@Override
-		public Object getNextValue() {
-			if (unbounded)
-				return 0;
-			return in.getNextValue();
-		}
-
-		@Override
-		public Object getPreviousValue() {
-			if (unbounded)
-				return null;
-			Object prev = in.getPreviousValue();
-			if (prev == null && unboundable)
-				prev = "unbounded";
-			return prev;
-		}
-
-		@Override
-		public Object getValue() {
-			if (unbounded)
-				return "unbounded";
-			return in.getValue();
-		}
-
-		public Integer getBoundValue() {
-			if (unbounded)
-				return null;
-			return (Integer) in.getNumber();
-		}
-
-		@Override
-		public void setValue(Object value) {
-			boolean old = unbounded;
-			unbounded = value.equals("unbounded") && unboundable;
-			if (!unbounded) {
-				in.setValue(value);
-				fireStateChanged();
-			} else if (old != unbounded)
-				fireStateChanged();
-		}
-
-		@Override
-		public int compareTo(PositiveUnboundedModel other) {
-			Integer me = getBoundValue(), them = other.getBoundValue();
-			if (me == null)
-				return (them == null ? 0 : 1);
-			if (them == null)
-				return -1;
-			return me.compareTo(them);
-		}
 	}
 }
