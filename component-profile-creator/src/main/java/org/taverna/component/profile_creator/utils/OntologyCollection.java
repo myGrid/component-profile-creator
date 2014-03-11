@@ -86,10 +86,10 @@ public class OntologyCollection {
 		return unmodifiableList(possibles);
 	}
 
-	public PossibleStatement getStatementFor(SemanticAnnotation sa) {
+	public PossibleStatement getStatementFor(SemanticAnnotation sa) throws OntologyCollectionException {
 		OntModel om = models.get(sa.getOntology());
 		if (om == null)
-			return null;// TODO throw exception?
+			throw new OntologyCollectionException("no model for " + sa.getOntology(), null);
 		Property p = om.createProperty(sa.getPredicate());
 		Resource r = sa.getValue().trim().isEmpty() ? null : om
 				.createResource(sa.getValue().trim());
@@ -293,14 +293,17 @@ public class OntologyCollection {
 			public JComponent getListCellRendererComponent(JList<?> list,
 					Object value, int index, boolean isSelected,
 					boolean cellHasFocus) {
-				if (isSelected) {
+				if (list.getSelectedIndex()==index) {
 					setBackground(list.getSelectionBackground());
 					setForeground(list.getSelectionForeground());
 				} else {
 					setBackground(list.getBackground());
 					setForeground(list.getForeground());
 				}
-				setText(((PossibleStatement) value).humanReadableForm);
+				if (value==null)
+					setText("<NULL>");
+				else
+					setText(((PossibleStatement) value).humanReadableForm);
 				return this;
 			}
 		};

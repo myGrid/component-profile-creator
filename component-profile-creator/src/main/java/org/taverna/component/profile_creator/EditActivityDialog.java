@@ -28,6 +28,7 @@ import javax.swing.table.DefaultTableModel;
 import org.taverna.component.profile_creator.utils.Cardinality;
 import org.taverna.component.profile_creator.utils.GridDialog;
 import org.taverna.component.profile_creator.utils.OntologyCollection;
+import org.taverna.component.profile_creator.utils.OntologyCollection.OntologyCollectionException;
 import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
 import org.taverna.component.profile_creator.utils.PositiveUnboundedModel;
 import org.taverna.component.profile_creator.utils.TableUtils.RowDeletionAction;
@@ -70,12 +71,14 @@ public class EditActivityDialog extends GridDialog {
 			errorDialog("Occurrence range must be sane.", "Bad Occurence Count");
 			return false;
 		}
-		for (SemanticAnnotation sa : semanticAnnotations)
-			if (ontosource.getStatementFor(sa) == null) {
-				errorDialog("Could not double check the construction of the "
-						+ "semantic annotation.", "Illegal Semantic Annotation");
-				return false;
-			}
+		try {
+			for (SemanticAnnotation sa : semanticAnnotations)
+				ontosource.getStatementFor(sa);
+		} catch (OntologyCollectionException e) {
+			errorDialog("Could not double check the construction of the "
+					+ "semantic annotation.", "Illegal Semantic Annotation");
+			return false;
+		}
 		return true;
 	}
 
@@ -203,8 +206,13 @@ public class EditActivityDialog extends GridDialog {
 			}
 
 		for (SemanticAnnotation sa : activity.getSemanticAnnotation())
-			annotations.addRow(new Object[] { ontosource.getStatementFor(sa),
-					Cardinality.get(sa.getMinOccurs(), sa.getMaxOccurs()),
-					new JButton(deleteRowAction) });
+			try {
+				annotations.addRow(new Object[] {
+						ontosource.getStatementFor(sa),
+						Cardinality.get(sa.getMinOccurs(), sa.getMaxOccurs()),
+						new JButton(deleteRowAction) });
+			} catch (OntologyCollectionException e) {
+				e.printStackTrace();
+			}
 	}
 }

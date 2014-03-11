@@ -17,6 +17,8 @@ import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static org.slf4j.LoggerFactory.getLogger;
+import static org.taverna.component.profile_creator.utils.Cardinality.OPTIONAL;
+import static org.taverna.component.profile_creator.utils.TableUtils.configureColumn;
 import static org.taverna.component.profile_creator.utils.TableUtils.installDelegatingColumn;
 
 import java.awt.BorderLayout;
@@ -28,6 +30,7 @@ import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,6 +54,8 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableModel;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -59,10 +64,12 @@ import javax.xml.ws.Holder;
 import org.taverna.component.profile_creator.EditActivityDialog.EditActivity;
 import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
 import org.taverna.component.profile_creator.EditPortDialog.EditPort;
+import org.taverna.component.profile_creator.utils.Cardinality;
 import org.taverna.component.profile_creator.utils.GridPanel;
 import org.taverna.component.profile_creator.utils.OntologyCollection;
 import org.taverna.component.profile_creator.utils.OntologyCollection.OntologyCollectionException;
 import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
+import org.taverna.component.profile_creator.utils.TableUtils.RowDeletionAction;
 
 import uk.org.taverna.ns._2012.component.profile.Activity;
 import uk.org.taverna.ns._2012.component.profile.ActivityAnnotation;
@@ -86,12 +93,14 @@ public class ProfileCreator extends JFrame {
 	private final JLabel id;
 	private final JTextField title, extend;
 	private final JTextArea description;
-	private final DefaultTableModel ontologyList, inputs, outputs, activities;
+	private final DefaultTableModel ontologyList, inputs, outputs, activities,
+			componentAnnotations;
 	private final JTable inputTable, outputTable, activityTable;
 	private final JCheckBox requireAuthor, requireDescription, requireTitle;
 	private File file;
 	private Profile profile;
 	private boolean modified;
+	private final Action deleteComponentAnnotationRow;
 
 	boolean isModified() {
 		return modified;
@@ -280,7 +289,13 @@ public class ProfileCreator extends JFrame {
 			sep = "<br>";
 		}
 		for (SemanticAnnotation sa : semanticAnnotations) {
-			PossibleStatement ps = ontologies.getStatementFor(sa);
+			PossibleStatement ps;
+			try {
+				ps = ontologies.getStatementFor(sa);
+			} catch (OntologyCollectionException e) {
+				e.printStackTrace();
+				continue;
+			}
 			sb.append(sep).append(ps);
 			numLines.value++;
 			sep = "<br>";
@@ -559,7 +574,44 @@ public class ProfileCreator extends JFrame {
 				defineTableList(new Class[] { null, null, String.class },
 						"Cardinality", "Type", "Annotations"), 0);
 		activities = (DefaultTableModel) jt.getModel();
+
 		tabs.add("Annotations", panel = new GridPanel(0));
+		final Action addSemanticAnnotation = new AbstractAction("Add Annotation") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (ontologies.getPossibleStatements().isEmpty()) {
+					showMessageDialog(ProfileCreator.this,
+							"No ontologies imported, so no annotations "
+									+ "are available.", "No Legal Annotations",
+							ERROR_MESSAGE);
+					return;
+				}
+				componentAnnotations.addRow(new Object[] {
+						ontologies.getPossibleStatements().get(0), OPTIONAL,
+						new JButton(deleteComponentAnnotationRow) });
+			}
+		};
+		if (ontologies.getPossibleStatements().isEmpty())
+			addSemanticAnnotation.setEnabled(false);
+		componentAnnotations = new DefaultTableModel(new Object[0][],
+				new Object[] { "Annotation", "Cardinality", "" });
+		final JTable ann = panel.add(addSemanticAnnotation, new JTable(
+				componentAnnotations), 0);
+		deleteComponentAnnotationRow = new RowDeletionAction(ann);
+		ontologies.addPropertyChangeListener(new PropertyChangeListener() {
+			@Override
+			public void propertyChange(PropertyChangeEvent evt) {
+				addSemanticAnnotation.setEnabled(!ontologies
+						.getPossibleStatements().isEmpty());
+				configureColumn(ann, 0, null, ontologies.tableRenderer(),
+						ontologies.tableEditor());
+			}
+		});
+		// ann.setPreferredScrollableViewportSize(new Dimension(24, 48));
+		configureColumn(ann, 1, 64, Cardinality.tableRenderer(),
+				Cardinality.tableEditor());
+		installDelegatingColumn(ann.getColumnModel().getColumn(2), "Del");
+
 		tabs.add("Extra Features", panel = new GridPanel(0));
 
 		abstract class ModifiedListener implements DocumentListener {
@@ -644,6 +696,21 @@ public class ProfileCreator extends JFrame {
 				ComponentAnnotations.DESCRIPTION);
 		new ComponentAnnotationChangeListener(requireTitle,
 				ComponentAnnotations.TITLE);
+		componentAnnotations.addTableModelListener(new TableModelListener() {
+			@Override
+			public void tableChanged(TableModelEvent e) {
+				profile.getComponent().getSemanticAnnotation().clear();
+				for (int r = 0; r < componentAnnotations.getRowCount(); r++) {
+					PossibleStatement ps = (PossibleStatement) componentAnnotations
+							.getValueAt(r, 0);
+					Cardinality c = (Cardinality) componentAnnotations
+							.getValueAt(r, 1);
+					profile.getComponent().getSemanticAnnotation()
+							.add(ps.getAnnotation(c));
+				}
+				setModified(true);
+			}
+		});
 
 		pack();
 		validate();
@@ -751,7 +818,7 @@ public class ProfileCreator extends JFrame {
 			addPort(outputTable, outputs, comp.getOutputPort(), port);
 		for (Activity activity : comp.getActivity())
 			addActivity(activityTable, activities, comp.getActivity(), activity);
-		
+
 		for (ComponentAnnotation o : comp.getAnnotation())
 			switch (o.getValue()) {
 			case AUTHOR:
@@ -765,7 +832,13 @@ public class ProfileCreator extends JFrame {
 				break;
 			}
 
-		// TODO semantic annotation
+		// Important! Clone that list here!
+		for (SemanticAnnotation sa : new ArrayList<>(comp.getSemanticAnnotation()))
+			componentAnnotations.addRow(new Object[] {
+					ontologies.getStatementFor(sa),
+					Cardinality.get(sa.getMinOccurs(), sa.getMaxOccurs()),
+					new JButton(deleteComponentAnnotationRow) });
+
 		// TODO exception handling
 		file = f;
 		profile = p;
