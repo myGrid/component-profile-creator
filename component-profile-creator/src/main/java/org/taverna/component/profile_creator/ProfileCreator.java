@@ -56,6 +56,7 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.ws.Holder;
 
+import org.taverna.component.profile_creator.EditActivityDialog.EditActivity;
 import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
 import org.taverna.component.profile_creator.EditPortDialog.EditPort;
 import org.taverna.component.profile_creator.utils.GridPanel;
@@ -63,6 +64,7 @@ import org.taverna.component.profile_creator.utils.OntologyCollection;
 import org.taverna.component.profile_creator.utils.OntologyCollection.OntologyCollectionException;
 import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
 
+import uk.org.taverna.ns._2012.component.profile.Activity;
 import uk.org.taverna.ns._2012.component.profile.ActivityAnnotation;
 import uk.org.taverna.ns._2012.component.profile.BasicAnnotations;
 import uk.org.taverna.ns._2012.component.profile.Component;
@@ -84,8 +86,8 @@ public class ProfileCreator extends JFrame {
 	private final JLabel id;
 	private final JTextField title, extend;
 	private final JTextArea description;
-	private final DefaultTableModel ontologyList, inputs, outputs;
-	private final JTable inputTable, outputTable;
+	private final DefaultTableModel ontologyList, inputs, outputs, activities;
+	private final JTable inputTable, outputTable, activityTable;
 	private final JCheckBox requireAuthor, requireDescription, requireTitle;
 	private File file;
 	private Profile profile;
@@ -196,6 +198,60 @@ public class ProfileCreator extends JFrame {
 				new Range(port.getMinOccurs(), port.getMaxOccurs()),
 				new Range(port.getMinDepth(), port.getMaxDepth()),
 				port.getName() == null ? "" : port.getName(), annDisplay, jb });
+		if (numLines.value > 1)
+			realTable.setRowHeight(realTable.getRowCount() - 1, numLines.value
+					* realTable.getRowHeight());
+	}
+
+	private void addActivity(JTable realTable, final DefaultTableModel table,
+			final List<Activity> activityCollection, final Activity activity) {
+		class Range {
+			int from;
+			Integer to;
+
+			Range(BigInteger from, String to) {
+				if (from == null)
+					this.from = 1;
+				else
+					this.from = from.intValue();
+				if (to == null)
+					this.to = 1;
+				else if (to.equals("unbounded"))
+					this.to = null;
+				else
+					this.to = Integer.parseInt(to);
+			}
+
+			@Override
+			public String toString() {
+				return (from == 0 ? "" : "" + from) + " - "
+						+ (to == null ? "" : "" + to);
+			}
+		}
+
+		JButton jb = new JButton(new AbstractAction("Del") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				int row = 0;
+				for (Activity p : activityCollection) {
+					if (p == activity) {
+						activityCollection.remove(p);
+						table.removeRow(row);
+						setModified(true);
+						break;
+					}
+					row++;
+				}
+			}
+		});
+		activityCollection.add(activity);
+		Holder<Integer> numLines = new Holder<>(0);
+		String annDisplay = getAnnotationsForDisplay(activity.getAnnotation(),
+				activity.getSemanticAnnotation(), numLines);
+		table.addRow(new Object[] {
+				new Range(activity.getMinOccurs(), activity.getMaxOccurs()),
+				activity.getType() == null ? "" : activity.getType(),
+				annDisplay, jb });
 		if (numLines.value > 1)
 			realTable.setRowHeight(realTable.getRowCount() - 1, numLines.value
 					* realTable.getRowHeight());
@@ -431,6 +487,24 @@ public class ProfileCreator extends JFrame {
 				setModified(true);
 			}
 		};
+		Action addActivity = new AbstractAction("Add Activity") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				new EditActivityDialog(ProfileCreator.this,
+						"Add an Activity Constraint", new EditActivity() {
+							@Override
+							public void edited(Activity port) {
+								doEdit(port);
+							}
+						}).setVisible(true);
+			}
+
+			private void doEdit(Activity activity) {
+				addActivity(activityTable, activities, profile.getComponent()
+						.getActivity(), activity);
+				setModified(true);
+			}
+		};
 
 		JMenu fileMenu;
 		setJMenuBar(new JMenuBar());
@@ -480,6 +554,11 @@ public class ProfileCreator extends JFrame {
 		outputs = (DefaultTableModel) jt.getModel();
 
 		tabs.add("Activities", panel = new GridPanel(0));
+		activityTable = jt = panel.add(
+				addActivity,
+				defineTableList(new Class[] { null, null, String.class },
+						"Cardinality", "Type", "Annotations"), 0);
+		activities = (DefaultTableModel) jt.getModel();
 		tabs.add("Annotations", panel = new GridPanel(0));
 		tabs.add("Extra Features", panel = new GridPanel(0));
 
@@ -670,6 +749,9 @@ public class ProfileCreator extends JFrame {
 		outputs.setRowCount(0);
 		for (Port port : comp.getOutputPort())
 			addPort(outputTable, outputs, comp.getOutputPort(), port);
+		for (Activity activity : comp.getActivity())
+			addActivity(activityTable, activities, comp.getActivity(), activity);
+		
 		for (ComponentAnnotation o : comp.getAnnotation())
 			switch (o.getValue()) {
 			case AUTHOR:
@@ -682,7 +764,7 @@ public class ProfileCreator extends JFrame {
 				requireTitle.setSelected(true);
 				break;
 			}
-		// TODO activity
+
 		// TODO semantic annotation
 		// TODO exception handling
 		file = f;
