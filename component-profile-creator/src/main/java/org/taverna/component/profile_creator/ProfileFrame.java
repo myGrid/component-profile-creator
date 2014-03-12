@@ -89,8 +89,14 @@ import uk.org.taverna.ns._2012.component.profile.Profile;
 import uk.org.taverna.ns._2012.component.profile.Replacement;
 import uk.org.taverna.ns._2012.component.profile.SemanticAnnotation;
 
+/**
+ * The main window of the profile editor.
+ * 
+ * @author Donal Fellows
+ * @see TavernaComponentProfileEditor
+ */
 @SuppressWarnings("serial")
-public class ProfileCreator extends JFrame {
+public class ProfileFrame extends JFrame {
 	private final JAXBContext context;
 	final OntologyCollection ontologies;
 	final ObjectFactory factory;
@@ -143,7 +149,7 @@ public class ProfileCreator extends JFrame {
 								.getMenuShortcutKeyMask()));
 				putValue(MNEMONIC_KEY, key);
 			}
-			ProfileCreator.this.addPropertyChangeListener("modified", this);
+			ProfileFrame.this.addPropertyChangeListener("modified", this);
 		}
 
 		protected void respondToModifiedChanged() {
@@ -364,7 +370,7 @@ public class ProfileCreator extends JFrame {
 		return tabs;
 	}
 
-	public ProfileCreator() throws JAXBException {
+	public ProfileFrame() throws JAXBException {
 		super("Taverna Component Profile Editor");
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
 		setLocationRelativeTo(null);
@@ -454,7 +460,7 @@ public class ProfileCreator extends JFrame {
 		Action addOnt = new AbstractAction("Add Ontology") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				new EditOntologyDialog(ProfileCreator.this, "Add an Ontology",
+				new EditOntologyDialog(ProfileFrame.this, "Add an Ontology",
 						new EditOntology() {
 							@Override
 							public boolean edited(Ontology ont) {
@@ -486,7 +492,7 @@ public class ProfileCreator extends JFrame {
 		Action addInput = new AbstractAction("Add Input Constraint") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				new EditPortDialog(ProfileCreator.this,
+				new EditPortDialog(ProfileFrame.this,
 						"Add an Input Port Constraint", new EditPort() {
 							@Override
 							public void edited(Port port) {
@@ -514,7 +520,7 @@ public class ProfileCreator extends JFrame {
 		Action addOutput = new AbstractAction("Add Output Constraint") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				new EditPortDialog(ProfileCreator.this,
+				new EditPortDialog(ProfileFrame.this,
 						"Add an Output Port Constraint", new EditPort() {
 							@Override
 							public void edited(Port port) {
@@ -541,7 +547,7 @@ public class ProfileCreator extends JFrame {
 		Action addActivity = new AbstractAction("Add Activity Constraint") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				new EditActivityDialog(ProfileCreator.this,
+				new EditActivityDialog(ProfileFrame.this,
 						"Add an Activity Constraint", new EditActivity() {
 							@Override
 							public void edited(Activity port) {
@@ -594,7 +600,8 @@ public class ProfileCreator extends JFrame {
 		tabs.add("Global", panel = new GridPanel(5));
 		id = panel.add("ID:", new JLabel(profile.getId()), 0);
 		title = panel.add("Name:", new JTextField(), 1); // Keep short?
-		description = panel.add("Description (plain text):", new JTextArea(3, 40), 2);
+		description = panel.add("Description (plain text):", new JTextArea(3,
+				40), 2);
 		extend = panel.add("Extends Profile (URL):", new JTextField(), 3);
 		JComponent jp = panel.add("Standard Annotations:", new JPanel(), 4);
 		jp.add(requireAuthor = new JCheckBox("Author"));
@@ -877,8 +884,10 @@ public class ProfileCreator extends JFrame {
 
 	protected void installProfile(File f, Profile p)
 			throws OntologyCollectionException {
-		// Important! Clone lists here to avoid
-		// ConcurrentModificationExceptions!
+		/*
+		 * Important! Clone lists here to avoid
+		 * ConcurrentModificationExceptions!
+		 */
 
 		id.setText(p.getId());
 		title.setText(p.getName());

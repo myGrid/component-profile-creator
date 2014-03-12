@@ -6,9 +6,10 @@ import static org.apache.commons.io.IOUtils.closeQuietly;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -31,8 +32,6 @@ import javax.swing.ListCellRenderer;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
-
-import org.apache.commons.io.IOUtils;
 
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Ontology;
@@ -263,10 +262,13 @@ public class OntologyCollection {
 			conn.addRequestProperty("Accept",
 					"application/rdf+xml,application/xml;q=0.9");
 			in = conn.getInputStream();
-			// TODO Consider whether the encoding is handled right
-			// ontologyModel.read(in, url.toString());
-			model.read(new StringReader(IOUtils.toString(in, "UTF-8")),
-					url.toString());
+			//System.out.println(conn.getHeaderFields());
+			if (conn.getContentEncoding() != null)
+				model.read(new InputStreamReader(new BufferedInputStream(in),
+						conn.getContentEncoding()), url.toString());
+			else
+				// Default the guessing to Jena...
+				model.read(new BufferedInputStream(in), url.toString());
 		} catch (NullPointerException | IOException e) {
 			throw new OntologyCollectionException("Problem reading ontology "
 					+ ontologyId, e);

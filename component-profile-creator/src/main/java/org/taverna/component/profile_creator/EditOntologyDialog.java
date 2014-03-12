@@ -35,7 +35,7 @@ import uk.org.taverna.ns._2012.component.profile.Ontology;
 public class EditOntologyDialog extends JDialog {
 	private Ontology ont;
 	private JTextField name, address;
-	private final ProfileCreator owner;
+	private final ProfileFrame owner;
 
 	public boolean validateModel(String name, String address) {
 		if (name.isEmpty() || address.isEmpty()) {
@@ -69,7 +69,7 @@ public class EditOntologyDialog extends JDialog {
 
 	private Action okAction, cancelAction;
 
-	public EditOntologyDialog(ProfileCreator parent, String title,
+	public EditOntologyDialog(ProfileFrame parent, String title,
 			final EditOntology callback) {
 		super(parent, title, true);
 
@@ -95,7 +95,7 @@ public class EditOntologyDialog extends JDialog {
 		};
 		ont = makeNew();
 		GridPanel container;
-		setContentPane(container = new GridPanel(-1));
+		setContentPane(container = new GridPanel());
 		name = container.add("Name:", new JTextField(30), 0);
 		address = container.add("Address:", new JTextField(30), 1);
 		container.add(new JSeparator(), 0, 2, 2);

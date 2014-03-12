@@ -111,7 +111,7 @@ public class EditActivityDialog extends GridDialog {
 		return factory.createActivity();
 	}
 
-	public EditActivityDialog(ProfileCreator parent, String title,
+	public EditActivityDialog(ProfileFrame parent, String title,
 			final EditActivity callback) {
 		this(parent, title, callback, makeDefaultActivity(parent.factory));
 	}
@@ -134,7 +134,7 @@ public class EditActivityDialog extends GridDialog {
 		}
 	}
 
-	protected EditActivityDialog(ProfileCreator parent, String title,
+	protected EditActivityDialog(ProfileFrame parent, String title,
 			EditActivity callback, Activity activity) {
 		super(parent, title, true);
 		this.callback = callback;
