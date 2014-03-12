@@ -67,7 +67,7 @@ public class EditPortDialog extends GridDialog {
 	public boolean validateModel(String name, int mindepth, Integer maxdepth,
 			int minoccurs, Integer maxoccurs,
 			List<SemanticAnnotation> semanticAnnotations) {
-		if (!name.isEmpty() && !name.matches("^[a-zA-Z]\\w*$")) {
+		if (!name.isEmpty() && !name.matches("^[a-zA-Z0-9_]+$")) {
 			errorDialog("Name must be a simple word, if specified.",
 					"Bad Format");
 			return false;
