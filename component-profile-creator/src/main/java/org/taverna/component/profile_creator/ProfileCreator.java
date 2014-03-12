@@ -461,7 +461,7 @@ public class ProfileCreator extends JFrame {
 				setModified(true);
 			}
 		};
-		Action addInput = new AbstractAction("Add Input") {
+		Action addInput = new AbstractAction("Add Input Constraint") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				new EditPortDialog(ProfileCreator.this,
@@ -490,7 +490,7 @@ public class ProfileCreator extends JFrame {
 				setModified(true);
 			}
 		};
-		Action addOutput = new AbstractAction("Add Output") {
+		Action addOutput = new AbstractAction("Add Output Constraint") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				new EditPortDialog(ProfileCreator.this,
@@ -517,7 +517,7 @@ public class ProfileCreator extends JFrame {
 				setModified(true);
 			}
 		};
-		Action addActivity = new AbstractAction("Add Activity") {
+		Action addActivity = new AbstractAction("Add Activity Constraint") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				new EditActivityDialog(ProfileCreator.this,
@@ -563,7 +563,7 @@ public class ProfileCreator extends JFrame {
 		jp.add(requireDescription = new JCheckBox("Description"));
 		jp.add(requireTitle = new JCheckBox("Title"));
 		final Action addSemanticAnnotation = new AbstractAction(
-				"Add Annotation") {
+				"Add Component Annotation") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (ontologies.getPossibleStatements().isEmpty()) {
