@@ -4,11 +4,11 @@
 	<groupId>uk.org.taverna</groupId>
 	<artifactId>component-profile-creator</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>Component Profile Creator Application</name>
+	<name>Taverna Component Profile Editor</name>
 	<description>An application for creating component profiles.</description>
 
 	<properties>
-		<appMainClass>org.taverna.component.profile_creator.ProfileCreator</appMainClass>
+		<appMainClass>org.taverna.component.profile_creator.TavernaComponentProfileEditor</appMainClass>
 	</properties>
 
 	<dependencies>

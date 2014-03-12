@@ -1,5 +1,6 @@
 package org.taverna.component.profile_creator;
 
+import static java.awt.Toolkit.getDefaultToolkit;
 import static org.taverna.component.profile_creator.utils.Cardinality.OPTIONAL;
 import static org.taverna.component.profile_creator.utils.PositiveUnboundedModel.couple;
 import static org.taverna.component.profile_creator.utils.TableUtils.configureColumn;
@@ -148,7 +149,7 @@ public class EditActivityDialog extends GridDialog {
 				maxOccurs = new PositiveUnboundedModel(true)), 3);
 		couple(minOccurs, maxOccurs);
 		container.add(new JSeparator(), 0, 4, 2);
-		JComponent jc = container.add("Std. Annotations:", new JPanel(), 5);
+		JComponent jc = container.add("Standard Annotations:", new JPanel(), 5);
 		mandateDescription = new JCheckBox("Require Description");
 		jc.add(mandateDescription);
 		container.add(new JSeparator(), 0, 6, 2);
@@ -181,6 +182,9 @@ public class EditActivityDialog extends GridDialog {
 		container.add(okCancelPanel(), 0, 9, 2);
 		install();
 		pack();
+		setLocation((getDefaultToolkit().getScreenSize().width) / 2
+				- getWidth() / 2, getDefaultToolkit().getScreenSize().height
+				/ 2 - getHeight() / 2);
 	}
 
 	private void install() {

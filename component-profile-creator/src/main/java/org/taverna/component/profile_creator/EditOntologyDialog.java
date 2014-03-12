@@ -1,5 +1,6 @@
 package org.taverna.component.profile_creator;
 
+import static java.awt.Toolkit.getDefaultToolkit;
 import static java.awt.event.KeyEvent.VK_ESCAPE;
 import static java.util.UUID.randomUUID;
 import static javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW;
@@ -19,6 +20,7 @@ import javax.swing.JDialog;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.JTextField;
+import javax.swing.SwingWorker;
 
 import org.taverna.component.profile_creator.utils.GridPanel;
 
@@ -65,11 +67,14 @@ public class EditOntologyDialog extends JDialog {
 		return o;
 	}
 
+	private Action okAction, cancelAction;
+
 	public EditOntologyDialog(ProfileCreator parent, String title,
 			final EditOntology callback) {
 		super(parent, title, true);
+
 		owner = parent;
-		Action okAction = new AbstractAction("OK") {
+		okAction = new AbstractAction("OK") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				String name = EditOntologyDialog.this.name.getText().trim();
@@ -78,12 +83,11 @@ public class EditOntologyDialog extends JDialog {
 				if (validateModel(name, address)) {
 					ont.setId(name);
 					ont.setValue(address);
-					callback.edited(ont);
-					dispose();
+					reportBack(callback);
 				}
 			}
 		};
-		Action cancelAction = new AbstractAction("Cancel") {
+		cancelAction = new AbstractAction("Cancel") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				dispose();
@@ -104,9 +108,33 @@ public class EditOntologyDialog extends JDialog {
 		getRootPane().registerKeyboardAction(cancelAction,
 				getKeyStroke(VK_ESCAPE, 0), WHEN_IN_FOCUSED_WINDOW);
 		pack();
+		setLocation((getDefaultToolkit().getScreenSize().width) / 2
+				- getWidth() / 2, getDefaultToolkit().getScreenSize().height
+				/ 2 - getHeight() / 2);
+	}
+
+	private void reportBack(final EditOntology callback) {
+		new SwingWorker<Object, Void>() {
+			@Override
+			protected Object doInBackground() {
+				setState(false);
+				if (callback.edited(ont))
+					dispose();
+				else
+					setState(true);
+				return null;
+			}
+
+			private void setState(boolean state) {
+				okAction.setEnabled(state);
+				cancelAction.setEnabled(state);
+				name.setEditable(state);
+				address.setEditable(state);
+			}
+		}.execute();
 	}
 
 	public interface EditOntology {
-		void edited(Ontology ont);
+		boolean edited(Ontology ont);
 	}
 }

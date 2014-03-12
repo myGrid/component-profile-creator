@@ -23,6 +23,7 @@ public abstract class GridDialog extends JDialog {
 
 	public GridDialog(JFrame parent, String title, boolean modal) {
 		super(parent, title, modal);
+
 		setContentPane(container = new GridPanel(-1));
 		setLayout(new GridBagLayout());
 		okAction = new AbstractAction("OK") {

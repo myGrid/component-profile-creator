@@ -118,6 +118,20 @@ public class ProfileCreator extends JFrame {
 		firePropertyChange("modified", oldMod, modified);
 	}
 
+	public File getFile() {
+		return file;
+	}
+
+	void setFile(File file) {
+		File oldFile = this.file;
+		this.file = file;
+		firePropertyChange("file", oldFile, file);
+		if (file == null)
+			setTitle("Taverna Component Profile Editor");
+		else
+			setTitle("Taverna Component Profile Editor \u2013 " + file);
+	}
+
 	abstract class WatchingAction extends AbstractAction implements
 			PropertyChangeListener {
 		public WatchingAction(String string, int key) {
@@ -129,7 +143,7 @@ public class ProfileCreator extends JFrame {
 								.getMenuShortcutKeyMask()));
 				putValue(MNEMONIC_KEY, key);
 			}
-			ProfileCreator.this.addPropertyChangeListener(this);
+			ProfileCreator.this.addPropertyChangeListener("modified", this);
 		}
 
 		protected void respondToModifiedChanged() {
@@ -137,8 +151,7 @@ public class ProfileCreator extends JFrame {
 
 		@Override
 		public void propertyChange(PropertyChangeEvent evt) {
-			if (evt.getPropertyName().equals("modified"))
-				respondToModifiedChanged();
+			respondToModifiedChanged();
 		}
 	}
 
@@ -344,8 +357,9 @@ public class ProfileCreator extends JFrame {
 	}
 
 	public ProfileCreator() throws JAXBException {
-		super("Taverna Component Profile Creator");
+		super("Taverna Component Profile Editor");
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
+		setLocationRelativeTo(null);
 
 		context = JAXBContext.newInstance(Profile.class);
 		factory = new ObjectFactory();
@@ -373,7 +387,7 @@ public class ProfileCreator extends JFrame {
 
 			@Override
 			protected void respondToModifiedChanged() {
-				setEnabled(isModified() || file != null);
+				setEnabled(isModified() || getFile() != null);
 			}
 		};
 		Action saveAction = new WatchingAction("Save", VK_S) {
@@ -435,19 +449,18 @@ public class ProfileCreator extends JFrame {
 				new EditOntologyDialog(ProfileCreator.this, "Add an Ontology",
 						new EditOntology() {
 							@Override
-							public void edited(Ontology ont) {
-								doEdit(ont);
+							public boolean edited(Ontology ont) {
+								return doEdit(ont);
 							}
 						}).setVisible(true);
 			}
 
-			private void doEdit(Ontology ont) {
+			private boolean doEdit(Ontology ont) {
 				for (Ontology o : profile.getOntology())
 					if (o.getId().equals(ont.getId())) {
-						errorDialog(
-								"That ontology ID is already present!",
+						errorDialog("That ontology ID is already present!",
 								"Duplicate Ontology");
-						return;
+						return false;
 					}
 				try {
 					addOntologyRow(ont);
@@ -455,10 +468,11 @@ public class ProfileCreator extends JFrame {
 					errorDialog(
 							"Problem when loading ontology: " + e.getMessage(),
 							"Bad Ontology Location");
-					return;
+					return false;
 				}
 				profile.getOntology().add(ont);
 				setModified(true);
+				return true;
 			}
 		};
 		Action addInput = new AbstractAction("Add Input Constraint") {
@@ -479,10 +493,9 @@ public class ProfileCreator extends JFrame {
 						if (p.getName() != null
 								&& p.getName().equals(port.getName())) {
 							errorDialog(
-									
-									"That input port already has a constraint!",
-									"Duplicate Input Port Constraint"
-									);
+
+							"That input port already has a constraint!",
+									"Duplicate Input Port Constraint");
 							return;
 						}
 				addPort(inputTable, inputs, profile.getComponent()
@@ -555,10 +568,10 @@ public class ProfileCreator extends JFrame {
 		tabs.add("Global", panel = new GridPanel(5));
 		setLayout(new GridBagLayout());
 		id = panel.add("ID:", new JLabel(profile.getId()), 0);
-		title = panel.add("Name:", new JTextField(), 1);
-		description = panel.add("Description:", new JTextArea(3, 40), 2);
-		extend = panel.add("Extends:", new JTextField(), 3);
-		JComponent jp = panel.add("Std. Annotations:", new JPanel(), 4);
+		title = panel.add("Name:", new JTextField(), 1); // Keep short?
+		description = panel.add("Description (plain text):", new JTextArea(3, 40), 2);
+		extend = panel.add("Extends Profile (URL):", new JTextField(), 3);
+		JComponent jp = panel.add("Standard Annotations:", new JPanel(), 4);
 		jp.add(requireAuthor = new JCheckBox("Author"));
 		jp.add(requireDescription = new JCheckBox("Description"));
 		jp.add(requireTitle = new JCheckBox("Title"));
@@ -567,10 +580,8 @@ public class ProfileCreator extends JFrame {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (ontologies.getPossibleStatements().isEmpty()) {
-					errorDialog(
-							"No ontologies imported, so no annotations "
-									+ "are available.", "No Legal Annotations"
-							);
+					errorDialog("No ontologies imported, so no annotations "
+							+ "are available.", "No Legal Annotations");
 					return;
 				}
 				componentAnnotations.addRow(new Object[] {
@@ -598,7 +609,7 @@ public class ProfileCreator extends JFrame {
 		configureColumn(ann, 1, 64, Cardinality.tableRenderer(),
 				Cardinality.tableEditor());
 		installDelegatingColumn(ann.getColumnModel().getColumn(2), "Del");
-		
+
 		tabs.add("Ports", panel = new GridPanel());
 		inputTable = jt = panel.add(
 				addInput,
@@ -761,6 +772,9 @@ public class ProfileCreator extends JFrame {
 		});
 
 		pack();
+		setLocation((getDefaultToolkit().getScreenSize().width) / 2
+				- getWidth() / 2, getDefaultToolkit().getScreenSize().height
+				/ 2 - getHeight() / 2);
 		validate();
 		setModified(true);
 		setModified(false);
@@ -791,14 +805,7 @@ public class ProfileCreator extends JFrame {
 		return he;
 	}
 
-	public static void main(String... args) throws Exception {
-		ProfileCreator pc = new ProfileCreator();
-		pc.setVisible(true);
-		if (args.length > 0)
-			pc.loadFile(args[0]);
-	}
-
-	private void loadFile(String filename) throws IOException, JAXBException,
+	public void loadFile(String filename) throws IOException, JAXBException,
 			OntologyCollectionException {
 		loadFile(new File(filename));
 	}
@@ -846,12 +853,12 @@ public class ProfileCreator extends JFrame {
 	}
 
 	private void saveFile() throws JAXBException {
-		if (file == null) {
+		if (getFile() == null) {
 			if (fileDialog.showSaveDialog(this) == APPROVE_OPTION)
 				saveFile(fileDialog.getSelectedFile());
 			return;
 		}
-		saveFile(file);
+		saveFile(getFile());
 	}
 
 	private void saveFile(File f) throws JAXBException {
@@ -859,12 +866,15 @@ public class ProfileCreator extends JFrame {
 				&& getExceptionHandling().getHandleException().isEmpty())
 			profile.getComponent().setExceptionHandling(null);
 		context.createMarshaller().marshal(profile, f);
-		file = f;
+		setFile(f);
 		setModified(false);
 	}
 
 	protected void installProfile(File f, Profile p)
 			throws OntologyCollectionException {
+		// Important! Clone lists here to avoid
+		// ConcurrentModificationExceptions!
+
 		id.setText(p.getId());
 		title.setText(p.getName());
 		description.setText(p.getDescription());
@@ -875,12 +885,12 @@ public class ProfileCreator extends JFrame {
 			addOntologyRow(o);
 		Component comp = p.getComponent();
 		inputs.setRowCount(0);
-		for (Port port : comp.getInputPort())
+		for (Port port : new ArrayList<>(comp.getInputPort()))
 			addPort(inputTable, inputs, comp.getInputPort(), port);
 		outputs.setRowCount(0);
-		for (Port port : comp.getOutputPort())
+		for (Port port : new ArrayList<>(comp.getOutputPort()))
 			addPort(outputTable, outputs, comp.getOutputPort(), port);
-		for (Activity activity : comp.getActivity())
+		for (Activity activity : new ArrayList<>(comp.getActivity()))
 			addActivity(activityTable, activities, comp.getActivity(), activity);
 
 		for (ComponentAnnotation o : comp.getAnnotation())
@@ -896,7 +906,6 @@ public class ProfileCreator extends JFrame {
 				break;
 			}
 
-		// Important! Clone those lists here!
 		for (SemanticAnnotation sa : new ArrayList<>(
 				comp.getSemanticAnnotation()))
 			componentAnnotations.addRow(new Object[] {
@@ -911,7 +920,7 @@ public class ProfileCreator extends JFrame {
 				addHandleException(he);
 		}
 
-		file = f;
+		setFile(f);
 		profile = p;
 		setModified(false);
 	}
@@ -924,6 +933,7 @@ public class ProfileCreator extends JFrame {
 
 	private void errorDialog(Throwable t, String title) {
 		errorDialog(t.getMessage(), title);
+		getLogger(getClass()).error(title, t);
 	}
 
 	private void errorDialog(String message, String title) {
