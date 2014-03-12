@@ -22,8 +22,8 @@ import static org.taverna.component.profile_creator.utils.TableUtils.configureCo
 import static org.taverna.component.profile_creator.utils.TableUtils.installDelegatingColumn;
 
 import java.awt.BorderLayout;
+import java.awt.Container;
 import java.awt.Dimension;
-import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -356,6 +356,14 @@ public class ProfileCreator extends JFrame {
 		return jt;
 	}
 
+	private JTabbedPane setupTabbedPane() {
+		JTabbedPane tabs = new JTabbedPane();
+		Container c = getContentPane();
+		c.setLayout(new BorderLayout());
+		c.add(tabs, CENTER);
+		return tabs;
+	}
+
 	public ProfileCreator() throws JAXBException {
 		super("Taverna Component Profile Editor");
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -548,33 +556,6 @@ public class ProfileCreator extends JFrame {
 				setModified(true);
 			}
 		};
-
-		JMenu fileMenu;
-		setJMenuBar(new JMenuBar());
-		getJMenuBar().add(fileMenu = new JMenu("File"));
-		fileMenu.add(newAction);
-		fileMenu.add(openAction);
-		fileMenu.add(new JSeparator());
-		fileMenu.add(saveAction);
-		fileMenu.add(saveAsAction);
-		fileMenu.add(new JSeparator());
-		fileMenu.add(quitAction);
-
-		JTabbedPane tabs;
-		JTable jt;
-		getContentPane().setLayout(new BorderLayout());
-		getContentPane().add(tabs = new JTabbedPane(), CENTER);
-		GridPanel panel;
-		tabs.add("Global", panel = new GridPanel(5));
-		setLayout(new GridBagLayout());
-		id = panel.add("ID:", new JLabel(profile.getId()), 0);
-		title = panel.add("Name:", new JTextField(), 1); // Keep short?
-		description = panel.add("Description (plain text):", new JTextArea(3, 40), 2);
-		extend = panel.add("Extends Profile (URL):", new JTextField(), 3);
-		JComponent jp = panel.add("Standard Annotations:", new JPanel(), 4);
-		jp.add(requireAuthor = new JCheckBox("Author"));
-		jp.add(requireDescription = new JCheckBox("Description"));
-		jp.add(requireTitle = new JCheckBox("Title"));
 		final Action addSemanticAnnotation = new AbstractAction(
 				"Add Component Annotation") {
 			@Override
@@ -589,6 +570,36 @@ public class ProfileCreator extends JFrame {
 						new JButton(deleteComponentAnnotationRow) });
 			}
 		};
+		Action addErrorHandler = new AbstractAction("Add Error Handler") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				addHandleException(defaultHandleException());
+			}
+		};
+
+		JMenu fileMenu;
+		setJMenuBar(new JMenuBar());
+		getJMenuBar().add(fileMenu = new JMenu("File"));
+		fileMenu.add(newAction);
+		fileMenu.add(openAction);
+		fileMenu.add(new JSeparator());
+		fileMenu.add(saveAction);
+		fileMenu.add(saveAsAction);
+		fileMenu.add(new JSeparator());
+		fileMenu.add(quitAction);
+
+		JTabbedPane tabs = setupTabbedPane();
+		JTable jt;
+		GridPanel panel;
+		tabs.add("Global", panel = new GridPanel(5));
+		id = panel.add("ID:", new JLabel(profile.getId()), 0);
+		title = panel.add("Name:", new JTextField(), 1); // Keep short?
+		description = panel.add("Description (plain text):", new JTextArea(3, 40), 2);
+		extend = panel.add("Extends Profile (URL):", new JTextField(), 3);
+		JComponent jp = panel.add("Standard Annotations:", new JPanel(), 4);
+		jp.add(requireAuthor = new JCheckBox("Author"));
+		jp.add(requireDescription = new JCheckBox("Description"));
+		jp.add(requireTitle = new JCheckBox("Title"));
 		if (ontologies.getPossibleStatements().isEmpty())
 			addSemanticAnnotation.setEnabled(false);
 		componentAnnotations = new DefaultTableModel(new Object[0][],
@@ -641,12 +652,6 @@ public class ProfileCreator extends JFrame {
 		activities = (DefaultTableModel) jt.getModel();
 		jt.setPreferredScrollableViewportSize(new Dimension(24, 48));
 		failLists = panel.add(new JCheckBox("Fail lists"), 1, 1);
-		Action addErrorHandler = new AbstractAction("Add Error Handler") {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				addHandleException(defaultHandleException());
-			}
-		};
 		if (ontologies.getPossibleStatements().isEmpty())
 			addSemanticAnnotation.setEnabled(false);
 		exceptionHandling = new DefaultTableModel(new Object[0][],
