@@ -33,6 +33,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Vector;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -77,12 +78,15 @@ import uk.org.taverna.ns._2012.component.profile.BasicAnnotations;
 import uk.org.taverna.ns._2012.component.profile.Component;
 import uk.org.taverna.ns._2012.component.profile.ComponentAnnotation;
 import uk.org.taverna.ns._2012.component.profile.ComponentAnnotations;
+import uk.org.taverna.ns._2012.component.profile.ExceptionHandling;
 import uk.org.taverna.ns._2012.component.profile.Extends;
+import uk.org.taverna.ns._2012.component.profile.HandleException;
 import uk.org.taverna.ns._2012.component.profile.ObjectFactory;
 import uk.org.taverna.ns._2012.component.profile.Ontology;
 import uk.org.taverna.ns._2012.component.profile.Port;
 import uk.org.taverna.ns._2012.component.profile.PortAnnotation;
 import uk.org.taverna.ns._2012.component.profile.Profile;
+import uk.org.taverna.ns._2012.component.profile.Replacement;
 import uk.org.taverna.ns._2012.component.profile.SemanticAnnotation;
 
 @SuppressWarnings("serial")
@@ -94,13 +98,15 @@ public class ProfileCreator extends JFrame {
 	private final JTextField title, extend;
 	private final JTextArea description;
 	private final DefaultTableModel ontologyList, inputs, outputs, activities,
-			componentAnnotations;
+			componentAnnotations, exceptionHandling;
 	private final JTable inputTable, outputTable, activityTable;
-	private final JCheckBox requireAuthor, requireDescription, requireTitle;
+	private final JCheckBox requireAuthor, requireDescription, requireTitle,
+			failLists;
 	private File file;
 	private Profile profile;
 	private boolean modified;
-	private final Action deleteComponentAnnotationRow;
+	private final Action deleteComponentAnnotationRow,
+			deleteExceptionHandlingRow;
 
 	boolean isModified() {
 		return modified;
@@ -210,6 +216,17 @@ public class ProfileCreator extends JFrame {
 		if (numLines.value > 1)
 			realTable.setRowHeight(realTable.getRowCount() - 1, numLines.value
 					* realTable.getRowHeight());
+	}
+
+	private void addHandleException(HandleException he) {
+		exceptionHandling.addRow(new Object[] {
+				he.getPattern(),
+				he.getPruneStack() != null,
+				he.getReplacement() != null ? he.getReplacement()
+						.getReplacementId() : "",
+				he.getReplacement() != null ? he.getReplacement()
+						.getReplacementMessage() : "",
+				new JButton(deleteExceptionHandlingRow) });
 	}
 
 	private void addActivity(JTable realTable, final DefaultTableModel table,
@@ -427,17 +444,17 @@ public class ProfileCreator extends JFrame {
 			private void doEdit(Ontology ont) {
 				for (Ontology o : profile.getOntology())
 					if (o.getId().equals(ont.getId())) {
-						showMessageDialog(ProfileCreator.this,
+						errorDialog(
 								"That ontology ID is already present!",
-								"Duplicate Ontology", ERROR_MESSAGE);
+								"Duplicate Ontology");
 						return;
 					}
 				try {
 					addOntologyRow(ont);
 				} catch (OntologyCollectionException e) {
-					showMessageDialog(ProfileCreator.this,
+					errorDialog(
 							"Problem when loading ontology: " + e.getMessage(),
-							"Bad Ontology Location", ERROR_MESSAGE);
+							"Bad Ontology Location");
 					return;
 				}
 				profile.getOntology().add(ont);
@@ -461,11 +478,11 @@ public class ProfileCreator extends JFrame {
 					for (Port p : profile.getComponent().getInputPort())
 						if (p.getName() != null
 								&& p.getName().equals(port.getName())) {
-							showMessageDialog(
-									ProfileCreator.this,
+							errorDialog(
+									
 									"That input port already has a constraint!",
-									"Duplicate Input Port Constraint",
-									ERROR_MESSAGE);
+									"Duplicate Input Port Constraint"
+									);
 							return;
 						}
 				addPort(inputTable, inputs, profile.getComponent()
@@ -490,11 +507,9 @@ public class ProfileCreator extends JFrame {
 					for (Port p : profile.getComponent().getOutputPort())
 						if (p.getName() != null
 								&& p.getName().equals(port.getName())) {
-							showMessageDialog(
-									ProfileCreator.this,
+							errorDialog(
 									"That output port already has a constraint!",
-									"Duplicate Output Port Constraint",
-									ERROR_MESSAGE);
+									"Duplicate Output Port Constraint");
 							return;
 						}
 				addPort(outputTable, outputs, profile.getComponent()
@@ -533,6 +548,7 @@ public class ProfileCreator extends JFrame {
 		fileMenu.add(quitAction);
 
 		JTabbedPane tabs;
+		JTable jt;
 		getContentPane().setLayout(new BorderLayout());
 		getContentPane().add(tabs = new JTabbedPane(), CENTER);
 		GridPanel panel;
@@ -546,44 +562,15 @@ public class ProfileCreator extends JFrame {
 		jp.add(requireAuthor = new JCheckBox("Author"));
 		jp.add(requireDescription = new JCheckBox("Description"));
 		jp.add(requireTitle = new JCheckBox("Title"));
-		JTable jt = panel.add(addOnt,
-				defineTableList(null, "Name", "Location"), 5);
-		ontologyList = (DefaultTableModel) jt.getModel();
-		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
-		jt.getColumn("Location").setMinWidth(192);
-
-		tabs.add("Inputs", panel = new GridPanel(0));
-		inputTable = jt = panel.add(
-				addInput,
-				defineTableList(
-						new Class<?>[] { null, null, null, String.class },
-						"Cardinality", "Depth", "Name", "Annotations"), 0);
-		inputs = (DefaultTableModel) jt.getModel();
-
-		tabs.add("Outputs", panel = new GridPanel(0));
-		outputTable = jt = panel.add(
-				addOutput,
-				defineTableList(
-						new Class<?>[] { null, null, null, String.class },
-						"Cardinality", "Depth", "Name", "Annotations"), 0);
-		outputs = (DefaultTableModel) jt.getModel();
-
-		tabs.add("Activities", panel = new GridPanel(0));
-		activityTable = jt = panel.add(
-				addActivity,
-				defineTableList(new Class[] { null, null, String.class },
-						"Cardinality", "Type", "Annotations"), 0);
-		activities = (DefaultTableModel) jt.getModel();
-
-		tabs.add("Annotations", panel = new GridPanel(0));
-		final Action addSemanticAnnotation = new AbstractAction("Add Annotation") {
+		final Action addSemanticAnnotation = new AbstractAction(
+				"Add Annotation") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (ontologies.getPossibleStatements().isEmpty()) {
-					showMessageDialog(ProfileCreator.this,
+					errorDialog(
 							"No ontologies imported, so no annotations "
-									+ "are available.", "No Legal Annotations",
-							ERROR_MESSAGE);
+									+ "are available.", "No Legal Annotations"
+							);
 					return;
 				}
 				componentAnnotations.addRow(new Object[] {
@@ -596,7 +583,7 @@ public class ProfileCreator extends JFrame {
 		componentAnnotations = new DefaultTableModel(new Object[0][],
 				new Object[] { "Annotation", "Cardinality", "" });
 		final JTable ann = panel.add(addSemanticAnnotation, new JTable(
-				componentAnnotations), 0);
+				componentAnnotations), 5);
 		deleteComponentAnnotationRow = new RowDeletionAction(ann);
 		ontologies.addPropertyChangeListener(new PropertyChangeListener() {
 			@Override
@@ -607,12 +594,65 @@ public class ProfileCreator extends JFrame {
 						ontologies.tableEditor());
 			}
 		});
-		// ann.setPreferredScrollableViewportSize(new Dimension(24, 48));
+		ann.setPreferredScrollableViewportSize(new Dimension(24, 48));
 		configureColumn(ann, 1, 64, Cardinality.tableRenderer(),
 				Cardinality.tableEditor());
 		installDelegatingColumn(ann.getColumnModel().getColumn(2), "Del");
+		
+		tabs.add("Ports", panel = new GridPanel());
+		inputTable = jt = panel.add(
+				addInput,
+				defineTableList(
+						new Class<?>[] { null, null, null, String.class },
+						"Cardinality", "Depth", "Name", "Annotations"), 0);
+		inputs = (DefaultTableModel) jt.getModel();
+		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
 
-		tabs.add("Extra Features", panel = new GridPanel(0));
+		outputTable = jt = panel.add(
+				addOutput,
+				defineTableList(
+						new Class<?>[] { null, null, null, String.class },
+						"Cardinality", "Depth", "Name", "Annotations"), 1);
+		outputs = (DefaultTableModel) jt.getModel();
+		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
+
+		tabs.add("Annotation Ontologies", panel = new GridPanel());
+		jt = panel.add(addOnt, defineTableList(null, "Name", "Location"), 0);
+		ontologyList = (DefaultTableModel) jt.getModel();
+		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
+		jt.getColumn("Location").setMinWidth(192);
+
+		tabs.add("Implementation", panel = new GridPanel());
+		activityTable = jt = panel.add(
+				addActivity,
+				defineTableList(new Class[] { null, null, String.class },
+						"Cardinality", "Type", "Annotations"), 0);
+		activities = (DefaultTableModel) jt.getModel();
+		jt.setPreferredScrollableViewportSize(new Dimension(24, 48));
+		failLists = panel.add(new JCheckBox("Fail lists"), 1, 1);
+		Action addErrorHandler = new AbstractAction("Add Error Handler") {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				addHandleException(defaultHandleException());
+			}
+		};
+		if (ontologies.getPossibleStatements().isEmpty())
+			addSemanticAnnotation.setEnabled(false);
+		exceptionHandling = new DefaultTableModel(new Object[0][],
+				new Object[] { "Pattern", "Prune", "Replacement ID",
+						"Replacement Message", "" }) {
+			@Override
+			public Class<?> getColumnClass(int col) {
+				if (col == 1)
+					return Boolean.class;
+				return super.getColumnClass(col);
+			}
+		};
+		final JTable exn = panel.add(addErrorHandler, new JTable(
+				exceptionHandling), 2);
+		deleteExceptionHandlingRow = new RowDeletionAction(exn);
+		exn.setPreferredScrollableViewportSize(new Dimension(24, 48));
+		installDelegatingColumn(exn.getColumnModel().getColumn(4), "Del");
 
 		abstract class ModifiedListener implements DocumentListener {
 			public abstract void respond();
@@ -674,7 +714,7 @@ public class ProfileCreator extends JFrame {
 				List<ComponentAnnotation> l = profile.getComponent()
 						.getAnnotation();
 				ComponentAnnotation anno = null;
-				for (ComponentAnnotation a : l) {
+				for (ComponentAnnotation a : l)
 					if (a.getValue().equals(subject)) {
 						if (listenTo.isSelected())
 							anno = a;
@@ -682,12 +722,12 @@ public class ProfileCreator extends JFrame {
 							l.remove(a);
 						break;
 					}
-				}
 				if (listenTo.isSelected() && anno == null) {
-					anno = new ComponentAnnotation();
+					anno = factory.createComponentAnnotation();
 					anno.setValue(subject);
 					l.add(anno);
 				}
+				setModified(true);
 			}
 		}
 		new ComponentAnnotationChangeListener(requireAuthor,
@@ -696,18 +736,26 @@ public class ProfileCreator extends JFrame {
 				ComponentAnnotations.DESCRIPTION);
 		new ComponentAnnotationChangeListener(requireTitle,
 				ComponentAnnotations.TITLE);
+		failLists.addChangeListener(new ChangeListener() {
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				getExceptionHandling().setFailLists(
+						failLists.isSelected() ? factory.createFailLists()
+								: null);
+				setModified(true);
+			}
+		});
 		componentAnnotations.addTableModelListener(new TableModelListener() {
 			@Override
 			public void tableChanged(TableModelEvent e) {
-				profile.getComponent().getSemanticAnnotation().clear();
-				for (int r = 0; r < componentAnnotations.getRowCount(); r++) {
-					PossibleStatement ps = (PossibleStatement) componentAnnotations
-							.getValueAt(r, 0);
-					Cardinality c = (Cardinality) componentAnnotations
-							.getValueAt(r, 1);
-					profile.getComponent().getSemanticAnnotation()
-							.add(ps.getAnnotation(c));
-				}
+				rebuildSemanticAnnotationList();
+				setModified(true);
+			}
+		});
+		exceptionHandling.addTableModelListener(new TableModelListener() {
+			@Override
+			public void tableChanged(TableModelEvent e) {
+				rebuildExceptionHandlingList();
 				setModified(true);
 			}
 		});
@@ -718,6 +766,13 @@ public class ProfileCreator extends JFrame {
 		setModified(false);
 	}
 
+	private ExceptionHandling getExceptionHandling() {
+		if (profile.getComponent().getExceptionHandling() == null)
+			profile.getComponent().setExceptionHandling(
+					factory.createExceptionHandling());
+		return profile.getComponent().getExceptionHandling();
+	}
+
 	private static Profile createDefault(ObjectFactory factory) {
 		Profile def = factory.createProfile();
 		def.setId(UUID.randomUUID().toString());
@@ -725,6 +780,15 @@ public class ProfileCreator extends JFrame {
 		def.setDescription("");
 		def.setComponent(factory.createComponent());
 		return def;
+	}
+
+	private HandleException defaultHandleException() {
+		HandleException he = factory.createHandleException();
+		he.setPattern("");
+		he.setReplacement(factory.createReplacement());
+		he.getReplacement().setReplacementId(UUID.randomUUID().toString());
+		he.getReplacement().setReplacementMessage("");
+		return he;
 	}
 
 	public static void main(String... args) throws Exception {
@@ -754,7 +818,7 @@ public class ProfileCreator extends JFrame {
 			loadFile(fileDialog.getSelectedFile());
 			return true;
 		} catch (Exception e) {
-			exceptionDialog(e, "Error in Opening");
+			errorDialog(e, "Error in Opening");
 			return false;
 		}
 	}
@@ -764,7 +828,7 @@ public class ProfileCreator extends JFrame {
 			saveFile();
 			return true;
 		} catch (Exception e) {
-			exceptionDialog(e, "Error in Saving");
+			errorDialog(e, "Error in Saving");
 			return false;
 		}
 	}
@@ -776,7 +840,7 @@ public class ProfileCreator extends JFrame {
 			saveFile(fileDialog.getSelectedFile());
 			return true;
 		} catch (Exception e) {
-			exceptionDialog(e, "Error in Saving");
+			errorDialog(e, "Error in Saving");
 			return false;
 		}
 	}
@@ -787,13 +851,13 @@ public class ProfileCreator extends JFrame {
 				saveFile(fileDialog.getSelectedFile());
 			return;
 		}
-		if (isModified()) {
-			context.createMarshaller().marshal(profile, file);
-			setModified(false);
-		}
+		saveFile(file);
 	}
 
 	private void saveFile(File f) throws JAXBException {
+		if (getExceptionHandling().getFailLists() == null
+				&& getExceptionHandling().getHandleException().isEmpty())
+			profile.getComponent().setExceptionHandling(null);
 		context.createMarshaller().marshal(profile, f);
 		file = f;
 		setModified(false);
@@ -832,14 +896,21 @@ public class ProfileCreator extends JFrame {
 				break;
 			}
 
-		// Important! Clone that list here!
-		for (SemanticAnnotation sa : new ArrayList<>(comp.getSemanticAnnotation()))
+		// Important! Clone those lists here!
+		for (SemanticAnnotation sa : new ArrayList<>(
+				comp.getSemanticAnnotation()))
 			componentAnnotations.addRow(new Object[] {
 					ontologies.getStatementFor(sa),
 					Cardinality.get(sa.getMinOccurs(), sa.getMaxOccurs()),
 					new JButton(deleteComponentAnnotationRow) });
+		if (comp.getExceptionHandling() != null) {
+			failLists
+					.setSelected(comp.getExceptionHandling().getFailLists() != null);
+			for (HandleException he : new ArrayList<>(comp
+					.getExceptionHandling().getHandleException()))
+				addHandleException(he);
+		}
 
-		// TODO exception handling
 		file = f;
 		profile = p;
 		setModified(false);
@@ -851,7 +922,41 @@ public class ProfileCreator extends JFrame {
 				"Save First?", YES_NO_CANCEL_OPTION, QUESTION_MESSAGE);
 	}
 
-	void exceptionDialog(Throwable t, String title) {
-		showMessageDialog(this, t.getMessage(), title, ERROR_MESSAGE);
+	private void errorDialog(Throwable t, String title) {
+		errorDialog(t.getMessage(), title);
+	}
+
+	private void errorDialog(String message, String title) {
+		showMessageDialog(this, message, title, ERROR_MESSAGE);
+	}
+
+	private void rebuildSemanticAnnotationList() {
+		profile.getComponent().getSemanticAnnotation().clear();
+		for (int r = 0; r < componentAnnotations.getRowCount(); r++) {
+			PossibleStatement ps = (PossibleStatement) componentAnnotations
+					.getValueAt(r, 0);
+			Cardinality c = (Cardinality) componentAnnotations.getValueAt(r, 1);
+			profile.getComponent().getSemanticAnnotation()
+					.add(ps.getAnnotation(c));
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private void rebuildExceptionHandlingList() {
+		getExceptionHandling().getHandleException().clear();
+		for (Vector<?> row : (Vector<Vector<?>>) exceptionHandling
+				.getDataVector()) {
+			HandleException he = factory.createHandleException();
+			he.setPattern((String) row.get(0));
+			if (row.get(1) != null && ((Boolean) row.get(1)))
+				he.setPruneStack(factory.createPruneStack());
+			if (!((String) row.get(2)).isEmpty()) {
+				Replacement repl = factory.createReplacement();
+				repl.setReplacementId((String) row.get(2));
+				repl.setReplacementMessage((String) row.get(3));
+				he.setReplacement(repl);
+			}
+			getExceptionHandling().getHandleException().add(he);
+		}
 	}
 }

@@ -19,6 +19,9 @@ import javax.swing.Scrollable;
 public class GridPanel extends JPanel {
 	int expand;
 
+	public GridPanel() {
+		this(-1);
+	}
 	public GridPanel(int expandingRow) {
 		setLayout(new GridBagLayout());
 		expand = expandingRow;
@@ -43,7 +46,10 @@ public class GridPanel extends JPanel {
 		constr.gridx = x;
 		constr.gridy = y;
 		constr.weightx = (x == 0 ? 0 : 1);
-		constr.weighty = (y != expand ? 0 : 1);
+		if (expand == -1)
+			constr.weighty = (component instanceof Scrollable ? 1 : 0);
+		else
+			constr.weighty = (y == expand ? 1 : 0);
 		constr.gridwidth = width;
 		constr.fill = (x == 0 ? HORIZONTAL : BOTH);
 		constr.anchor = NORTH;
