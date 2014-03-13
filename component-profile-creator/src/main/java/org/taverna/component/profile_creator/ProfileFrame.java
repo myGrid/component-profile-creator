@@ -8,6 +8,7 @@ import static java.awt.event.KeyEvent.VK_N;
 import static java.awt.event.KeyEvent.VK_O;
 import static java.awt.event.KeyEvent.VK_Q;
 import static java.awt.event.KeyEvent.VK_S;
+import static java.lang.System.getProperty;
 import static javax.swing.Action.ACCELERATOR_KEY;
 import static javax.swing.JFileChooser.APPROVE_OPTION;
 import static javax.swing.JOptionPane.CANCEL_OPTION;
@@ -16,9 +17,11 @@ import static javax.swing.JOptionPane.QUESTION_MESSAGE;
 import static javax.swing.JOptionPane.YES_NO_CANCEL_OPTION;
 import static javax.swing.JOptionPane.YES_OPTION;
 import static javax.swing.JOptionPane.showConfirmDialog;
+import static javax.swing.JOptionPane.showInputDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static org.slf4j.LoggerFactory.getLogger;
+import static org.taverna.component.profile_creator.TavernaComponentProfileEditor.APP_NAME;
 import static org.taverna.component.profile_creator.TavernaComponentProfileEditor.isOnMac;
 import static org.taverna.component.profile_creator.utils.Cardinality.OPTIONAL;
 import static org.taverna.component.profile_creator.utils.TableUtils.configureColumn;
@@ -37,6 +40,8 @@ import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -144,9 +149,9 @@ public class ProfileFrame extends JFrame {
 		this.file = file;
 		firePropertyChange("file", oldFile, file);
 		if (file == null)
-			setTitle("Taverna Component Profile Editor");
+			setTitle(APP_NAME);
 		else
-			setTitle("Taverna Component Profile Editor \u2013 " + file);
+			setTitle(APP_NAME + " \u2013 " + file);
 	}
 
 	abstract class WatchingAction extends AbstractAction implements
@@ -433,7 +438,7 @@ public class ProfileFrame extends JFrame {
 	}
 
 	public ProfileFrame() throws JAXBException {
-		super("Taverna Component Profile Editor");
+		super(APP_NAME);
 		setLocationRelativeTo(null);
 
 		context = JAXBContext.newInstance(Profile.class);
@@ -507,6 +512,21 @@ public class ProfileFrame extends JFrame {
 					}
 				}
 				open();
+			}
+		};
+		Action openUrlAction = new WatchingAction("Open URL...", 0) {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (isModified()) {
+					switch (confirmForSave("opening another profile")) {
+					case CANCEL_OPTION:
+						return;
+					case YES_OPTION:
+						if (!save())
+							return;
+					}
+				}
+				openUrl();
 			}
 		};
 		quitAction = new WatchingAction("Quit", VK_Q) {
@@ -661,6 +681,7 @@ public class ProfileFrame extends JFrame {
 		getJMenuBar().add(fileMenu = new JMenu("File"));
 		fileMenu.add(newAction);
 		fileMenu.add(openAction);
+		fileMenu.add(openUrlAction);
 		fileMenu.add(new JSeparator());
 		fileMenu.add(saveAction);
 		fileMenu.add(saveAsAction);
@@ -952,8 +973,8 @@ public class ProfileFrame extends JFrame {
 
 	private void loadFile(File file) throws IOException, JAXBException,
 			OntologyCollectionException {
-		Profile p = (Profile) context.createUnmarshaller().unmarshal(file);
-		installProfile(file, p);
+		installProfile(file,
+				(Profile) context.createUnmarshaller().unmarshal(file));
 	}
 
 	private JFileChooser fileDialog = new JFileChooser();
@@ -965,6 +986,23 @@ public class ProfileFrame extends JFrame {
 			loadFile(fileDialog.getSelectedFile());
 			return true;
 		} catch (Exception e) {
+			errorDialog(e, "Error in Opening");
+			return false;
+		}
+	}
+
+	public boolean openUrl() {
+		String url = showInputDialog(this,
+				"Enter a (publicly-readable) URL to load from.", "Open URL",
+				QUESTION_MESSAGE);
+		if (url == null || url.trim().isEmpty())
+			return false;
+		try {
+			installProfile(null, (Profile) context.createUnmarshaller()
+					.unmarshal(new URL(url)));
+			return true;
+		} catch (MalformedURLException | JAXBException
+				| OntologyCollectionException e) {
 			errorDialog(e, "Error in Opening");
 			return false;
 		}
@@ -1122,13 +1160,14 @@ public class ProfileFrame extends JFrame {
 		@Override
 		public void handleAbout(ApplicationEvent event) {
 			event.setHandled(true);
-			showMessageDialog(
-					ProfileFrame.this,
-					"<html>Taverna Component Profile Editor, "
-							+ System.getProperty("app.version")
-							+ "<p>Copyright \u00a9 "
-							+ System.getProperty("app.year")
-							+ ", The University of Manchester.");
+			showMessageDialog(ProfileFrame.this,
+					"<html><div style=\"width:500px\"><h2>" + APP_NAME + ", "
+							+ getProperty("app.version")
+							+ "</h2><p>Copyright \u00a9 "
+							+ getProperty("app.year")
+							+ ", The University of Manchester.<p><p>"
+							+ "<small>" + getProperty("app.description")
+							+ "</small></div>");
 		}
 
 		@Override

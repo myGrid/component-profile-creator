@@ -19,6 +19,8 @@ import org.simplericity.macify.eawt.DefaultApplication;
  * @see ProfileFrame
  */
 public abstract class TavernaComponentProfileEditor {
+	public static final String APP_NAME = "Taverna Component Profile Editor";
+
 	public static boolean isOnMac() {
 		return getProperty("os.name").toLowerCase().startsWith("mac os x");
 	}
@@ -35,7 +37,7 @@ public abstract class TavernaComponentProfileEditor {
 		getProperties().load(
 				TavernaComponentProfileEditor.class
 						.getResourceAsStream("/app.properties"));
-		macSetup("Taverna Component Profile Editor");
+		macSetup(APP_NAME);
 		UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 		try {
 			Application app = new DefaultApplication();
