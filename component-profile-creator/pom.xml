@@ -6,6 +6,7 @@
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Taverna Component Profile Editor</name>
 	<description>An application for creating component profiles.</description>
+	<inceptionYear>2014</inceptionYear>
 
 	<properties>
 		<appMainClass>org.taverna.component.profile_creator.TavernaComponentProfileEditor</appMainClass>
@@ -21,6 +22,11 @@
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 			<version>1.4</version>
+		</dependency>
+		<dependency>
+			<groupId>org.simplericity.macify</groupId>
+			<artifactId>macify</artifactId>
+			<version>1.6</version>
 		</dependency>
 	</dependencies>
 
@@ -81,5 +87,20 @@
 				</executions>
 			</plugin>
 		</plugins>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<filtering>true</filtering>
+				<includes>
+					<include>**/*.properties</include>
+				</includes>
+			</resource>
+			<resource>
+				<directory>src/main/resources</directory>
+				<excludes>
+					<exclude>**/*.properties</exclude>
+				</excludes>
+			</resource>
+		</resources>
 	</build>
 </project>

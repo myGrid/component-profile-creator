@@ -155,7 +155,7 @@ public class EditPortDialog extends GridDialog {
 		}
 	}
 
-	protected EditPortDialog(ProfileFrame parent, String title,
+	public EditPortDialog(ProfileFrame parent, String title,
 			EditPort callback, Port port) {
 		super(parent, title, true);
 		this.callback = callback;

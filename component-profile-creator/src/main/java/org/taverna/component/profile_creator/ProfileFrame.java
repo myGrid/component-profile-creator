@@ -2,11 +2,13 @@ package org.taverna.component.profile_creator;
 
 import static java.awt.BorderLayout.CENTER;
 import static java.awt.Toolkit.getDefaultToolkit;
+import static java.awt.event.InputEvent.SHIFT_DOWN_MASK;
 import static java.awt.event.KeyEvent.VK_A;
 import static java.awt.event.KeyEvent.VK_N;
 import static java.awt.event.KeyEvent.VK_O;
 import static java.awt.event.KeyEvent.VK_Q;
 import static java.awt.event.KeyEvent.VK_S;
+import static javax.swing.Action.ACCELERATOR_KEY;
 import static javax.swing.JFileChooser.APPROVE_OPTION;
 import static javax.swing.JOptionPane.CANCEL_OPTION;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
@@ -17,14 +19,19 @@ import static javax.swing.JOptionPane.showConfirmDialog;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static org.slf4j.LoggerFactory.getLogger;
+import static org.taverna.component.profile_creator.TavernaComponentProfileEditor.isOnMac;
 import static org.taverna.component.profile_creator.utils.Cardinality.OPTIONAL;
 import static org.taverna.component.profile_creator.utils.TableUtils.configureColumn;
 import static org.taverna.component.profile_creator.utils.TableUtils.installDelegatingColumn;
+import static org.taverna.component.profile_creator.utils.TableUtils.makeRowsDialogEditable;
+import static org.taverna.component.profile_creator.utils.TableUtils.setRowLines;
 
 import java.awt.BorderLayout;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
@@ -57,11 +64,14 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.ws.Holder;
 
+import org.simplericity.macify.eawt.ApplicationEvent;
+import org.simplericity.macify.eawt.ApplicationListener;
 import org.taverna.component.profile_creator.EditActivityDialog.EditActivity;
 import org.taverna.component.profile_creator.EditOntologyDialog.EditOntology;
 import org.taverna.component.profile_creator.EditPortDialog.EditPort;
@@ -71,6 +81,7 @@ import org.taverna.component.profile_creator.utils.OntologyCollection;
 import org.taverna.component.profile_creator.utils.OntologyCollection.OntologyCollectionException;
 import org.taverna.component.profile_creator.utils.OntologyCollection.PossibleStatement;
 import org.taverna.component.profile_creator.utils.TableUtils.RowDeletionAction;
+import org.taverna.component.profile_creator.utils.TableUtils.ShowDialog;
 
 import uk.org.taverna.ns._2012.component.profile.Activity;
 import uk.org.taverna.ns._2012.component.profile.ActivityAnnotation;
@@ -105,14 +116,14 @@ public class ProfileFrame extends JFrame {
 	private final JTextArea description;
 	private final DefaultTableModel ontologyList, inputs, outputs, activities,
 			componentAnnotations, exceptionHandling;
-	private final JTable inputTable, outputTable, activityTable;
+	private final JTable ontologyTable, inputTable, outputTable, activityTable;
 	private final JCheckBox requireAuthor, requireDescription, requireTitle,
 			failLists;
 	private File file;
 	private Profile profile;
 	private boolean modified;
 	private final Action deleteComponentAnnotationRow,
-			deleteExceptionHandlingRow;
+			deleteExceptionHandlingRow, quitAction;
 
 	boolean isModified() {
 		return modified;
@@ -161,9 +172,16 @@ public class ProfileFrame extends JFrame {
 		}
 	}
 
-	private void addOntologyRow(Ontology ont)
+	private void addOntologyRow(Ontology ont, boolean trapException)
 			throws OntologyCollectionException {
-		ontologies.addOntology(ont);
+		Throwable disable = null;
+		try {
+			ontologies.addOntology(ont);
+		} catch (OntologyCollectionException e) {
+			if (!trapException)
+				throw e;
+			disable = e;
+		}
 		final String id = ont.getId();
 		JButton jb = new JButton(new AbstractAction("Del") {
 			@Override
@@ -180,35 +198,79 @@ public class ProfileFrame extends JFrame {
 				}
 			}
 		});
-		ontologyList.addRow(new Object[] { ont.getId(), ont.getValue(), jb });
+		if (disable != null)
+			ontologyList.addRow(new Object[] {
+					new Disable(ont.getId(), disable),
+					new Disable(ont.getValue(), disable), jb });
+		else
+			ontologyList
+					.addRow(new Object[] { ont.getId(), ont.getValue(), jb });
+	}
+
+	static class Disable {
+		private Object val;
+		private Throwable exn;
+
+		Disable(Object content, Throwable exception) {
+			this.val = content;
+			while (exception.getCause() != null)
+				exception = exception.getCause();
+			this.exn = exception;
+		}
+
+		String s() {
+			return val.toString();
+		}
+
+		String t() {
+			return exn.getMessage();
+		}
+	}
+
+	static class DisabledRenderer extends DefaultTableCellRenderer {
+		@Override
+		public JComponent getTableCellRendererComponent(JTable table,
+				Object value, boolean isSelected, boolean hasFocus, int row,
+				int column) {
+			super.getTableCellRendererComponent(table, value, isSelected,
+					hasFocus, row, column);
+			if (value instanceof Disable) {
+				Disable d = (Disable) value;
+				setEnabled(false);
+				setText(d.s());
+				setToolTipText("<html>This ontology had a problem during loading.<p>"
+						+ d.t());
+			}
+			return this;
+		}
+	}
+
+	static class Range {
+		int from;
+		Integer to;
+
+		Range(BigInteger from, String to) {
+			if (from == null)
+				this.from = 1;
+			else
+				this.from = from.intValue();
+			if (to == null)
+				this.to = 1;
+			else if (to.equals("unbounded"))
+				this.to = null;
+			else
+				this.to = Integer.parseInt(to);
+		}
+
+		@Override
+		public String toString() {
+			return (from == 0 ? "" : "" + from) + " - "
+					+ (to == null ? "" : "" + to);
+		}
 	}
 
 	private void addPort(JTable realTable, final DefaultTableModel table,
 			final List<Port> portCollection, final Port port) {
-		class Range {
-			int from;
-			Integer to;
-
-			Range(BigInteger from, String to) {
-				if (from == null)
-					this.from = 1;
-				else
-					this.from = from.intValue();
-				if (to == null)
-					this.to = 1;
-				else if (to.equals("unbounded"))
-					this.to = null;
-				else
-					this.to = Integer.parseInt(to);
-			}
-
-			@Override
-			public String toString() {
-				return (from == 0 ? "" : "" + from) + " - "
-						+ (to == null ? "" : "" + to);
-			}
-		}
-
 		JButton jb = new JButton(new AbstractAction("Del") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -237,6 +299,18 @@ public class ProfileFrame extends JFrame {
 					* realTable.getRowHeight());
 	}
 
+	private void applyPortEdit(List<Port> ports, JTable table, int row,
+			Port port, Object[] rowModel) {
+		ports.set(row, port);
+		rowModel[0] = new Range(port.getMinOccurs(), port.getMaxOccurs());
+		rowModel[1] = new Range(port.getMinDepth(), port.getMaxDepth());
+		rowModel[2] = port.getName() == null ? "" : port.getName();
+		Holder<Integer> numLines = new Holder<>(0);
+		rowModel[3] = getAnnotationsForDisplay(port.getAnnotation(),
+				port.getSemanticAnnotation(), numLines);
+		setRowLines(table, row, numLines.value);
+	}
+
 	private void addHandleException(HandleException he) {
 		exceptionHandling.addRow(new Object[] {
 				he.getPattern(),
@@ -250,30 +324,6 @@ public class ProfileFrame extends JFrame {
 
 	private void addActivity(JTable realTable, final DefaultTableModel table,
 			final List<Activity> activityCollection, final Activity activity) {
-		class Range {
-			int from;
-			Integer to;
-
-			Range(BigInteger from, String to) {
-				if (from == null)
-					this.from = 1;
-				else
-					this.from = from.intValue();
-				if (to == null)
-					this.to = 1;
-				else if (to.equals("unbounded"))
-					this.to = null;
-				else
-					this.to = Integer.parseInt(to);
-			}
-
-			@Override
-			public String toString() {
-				return (from == 0 ? "" : "" + from) + " - "
-						+ (to == null ? "" : "" + to);
-			}
-		}
-
 		JButton jb = new JButton(new AbstractAction("Del") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -300,6 +350,18 @@ public class ProfileFrame extends JFrame {
 		if (numLines.value > 1)
 			realTable.setRowHeight(realTable.getRowCount() - 1, numLines.value
 					* realTable.getRowHeight());
+	}
+
+	private void applyActivityEdit(List<Activity> activities, JTable table,
+			int row, Activity activity, Object[] rowModel) {
+		activities.set(row, activity);
+		rowModel[0] = new Range(activity.getMinOccurs(),
+				activity.getMaxOccurs());
+		rowModel[1] = activity.getType() == null ? "" : activity.getType();
+		Holder<Integer> numLines = new Holder<>(0);
+		rowModel[2] = getAnnotationsForDisplay(activity.getAnnotation(),
+				activity.getSemanticAnnotation(), numLines);
+		setRowLines(table, row, numLines.value);
 	}
 
 	private String getAnnotationsForDisplay(List<?> annotations,
@@ -329,7 +391,7 @@ public class ProfileFrame extends JFrame {
 			try {
 				ps = ontologies.getStatementFor(sa);
 			} catch (OntologyCollectionException e) {
-				e.printStackTrace();
+				// e.printStackTrace();
 				continue;
 			}
 			sb.append(sep).append(ps);
@@ -347,7 +409,7 @@ public class ProfileFrame extends JFrame {
 				realColumns) {
 			@Override
 			public boolean isCellEditable(int x, int y) {
-				return y == (realColumns.length - 1);
+				return y == (realColumns.length - 1) || true;
 			}
 
 			@Override
@@ -372,7 +434,6 @@ public class ProfileFrame extends JFrame {
 
 	public ProfileFrame() throws JAXBException {
 		super("Taverna Component Profile Editor");
-		setDefaultCloseOperation(EXIT_ON_CLOSE);
 		setLocationRelativeTo(null);
 
 		context = JAXBContext.newInstance(Profile.class);
@@ -426,6 +487,12 @@ public class ProfileFrame extends JFrame {
 				setEnabled(isModified());
 			}
 		};
+		if (isOnMac())
+			saveAsAction.putValue(
+					ACCELERATOR_KEY,
+					getKeyStroke(VK_S, SHIFT_DOWN_MASK
+							+ getDefaultToolkit().getMenuShortcutKeyMask()));
+
 		saveAsAction.putValue(Action.MNEMONIC_KEY, VK_A);
 		Action openAction = new WatchingAction("Open...", VK_O) {
 			@Override
@@ -442,7 +509,7 @@ public class ProfileFrame extends JFrame {
 				open();
 			}
 		};
-		Action quitAction = new WatchingAction("Quit", VK_Q) {
+		quitAction = new WatchingAction("Quit", VK_Q) {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (isModified()) {
@@ -457,6 +524,12 @@ public class ProfileFrame extends JFrame {
 				System.exit(0);
 			}
 		};
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				quitAction.actionPerformed(null);
+			}
+		});
 		Action addOnt = new AbstractAction("Add Ontology") {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -477,7 +550,7 @@ public class ProfileFrame extends JFrame {
 						return false;
 					}
 				try {
-					addOntologyRow(ont);
+					addOntologyRow(ont, false);
 				} catch (OntologyCollectionException e) {
 					errorDialog(
 							"Problem when loading ontology: " + e.getMessage(),
@@ -591,11 +664,12 @@ public class ProfileFrame extends JFrame {
 		fileMenu.add(new JSeparator());
 		fileMenu.add(saveAction);
 		fileMenu.add(saveAsAction);
-		fileMenu.add(new JSeparator());
-		fileMenu.add(quitAction);
+		if (!isOnMac()) {
+			fileMenu.add(new JSeparator());
+			fileMenu.add(quitAction);
+		}
 
 		JTabbedPane tabs = setupTabbedPane();
-		JTable jt;
 		GridPanel panel;
 		tabs.add("Global", panel = new GridPanel(5));
 		id = panel.add("ID:", new JLabel(profile.getId()), 0);
@@ -629,35 +703,89 @@ public class ProfileFrame extends JFrame {
 		installDelegatingColumn(ann.getColumnModel().getColumn(2), "Del");
 
 		tabs.add("Ports", panel = new GridPanel());
-		inputTable = jt = panel.add(
+		inputTable = panel.add(
 				addInput,
 				defineTableList(
 						new Class<?>[] { null, null, null, String.class },
 						"Cardinality", "Depth", "Name", "Annotations"), 0);
-		inputs = (DefaultTableModel) jt.getModel();
-		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
+		inputs = (DefaultTableModel) inputTable.getModel();
+		inputTable.setPreferredScrollableViewportSize(new Dimension(256, 48));
+		makeRowsDialogEditable(inputTable, new ShowDialog() {
+			@Override
+			public Object[] edit(final Object[] rowData, final int rowNumber) {
+				final List<Port> portList = profile.getComponent()
+						.getInputPort();
+				new EditPortDialog(ProfileFrame.this,
+						"Edit an Input Port Constraint", new EditPort() {
+							@Override
+							public void edited(Port port) {
+								applyPortEdit(portList, inputTable, rowNumber,
+										port, rowData);
+								setModified(true);
+							}
+						}, portList.get(rowNumber)).setVisible(true);
+				return rowData;
+			}
+		});
 
-		outputTable = jt = panel.add(
+		outputTable = panel.add(
 				addOutput,
 				defineTableList(
 						new Class<?>[] { null, null, null, String.class },
 						"Cardinality", "Depth", "Name", "Annotations"), 1);
-		outputs = (DefaultTableModel) jt.getModel();
-		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
+		outputs = (DefaultTableModel) outputTable.getModel();
+		outputTable.setPreferredScrollableViewportSize(new Dimension(256, 48));
+		makeRowsDialogEditable(outputTable, new ShowDialog() {
+			@Override
+			public Object[] edit(final Object[] rowData, final int rowNumber) {
+				final List<Port> portList = profile.getComponent()
+						.getOutputPort();
+				new EditPortDialog(ProfileFrame.this,
+						"Edit an Output Port Constraint", new EditPort() {
+							@Override
+							public void edited(Port port) {
+								applyPortEdit(portList, outputTable, rowNumber,
+										port, rowData);
+								setModified(true);
+							}
+						}, portList.get(rowNumber)).setVisible(true);
+				return rowData;
+			}
+		});
 
 		tabs.add("Annotation Ontologies", panel = new GridPanel());
-		jt = panel.add(addOnt, defineTableList(null, "Name", "Location"), 0);
-		ontologyList = (DefaultTableModel) jt.getModel();
-		jt.setPreferredScrollableViewportSize(new Dimension(256, 48));
-		jt.getColumn("Location").setMinWidth(192);
+		ontologyTable = panel.add(addOnt,
+				defineTableList(null, "Name", "Location"), 0);
+		ontologyList = (DefaultTableModel) ontologyTable.getModel();
+		ontologyTable
+				.setPreferredScrollableViewportSize(new Dimension(256, 48));
+		ontologyTable.getColumn("Location").setMinWidth(192);
+		ontologyTable.setDefaultRenderer(Object.class, new DisabledRenderer());
 
 		tabs.add("Implementation", panel = new GridPanel());
-		activityTable = jt = panel.add(
+		activityTable = panel.add(
 				addActivity,
 				defineTableList(new Class[] { null, null, String.class },
 						"Cardinality", "Type", "Annotations"), 0);
-		activities = (DefaultTableModel) jt.getModel();
-		jt.setPreferredScrollableViewportSize(new Dimension(24, 48));
+		activities = (DefaultTableModel) activityTable.getModel();
+		activityTable.setPreferredScrollableViewportSize(new Dimension(24, 48));
+		makeRowsDialogEditable(activityTable, new ShowDialog() {
+			@Override
+			public Object[] edit(final Object[] rowData, final int rowNumber) {
+				final List<Activity> actList = profile.getComponent()
+						.getActivity();
+				new EditActivityDialog(ProfileFrame.this,
+						"Edit an Activity Constraint", new EditActivity() {
+							@Override
+							public void edited(Activity port) {
+								applyActivityEdit(actList, activityTable,
+										rowNumber, port, rowData);
+								setModified(true);
+							}
+						}, actList.get(rowNumber)).setVisible(true);
+				return rowData;
+			}
+		});
 		failLists = panel.add(new JCheckBox("Fail lists"), 1, 1);
 		if (ontologies.getPossibleStatements().isEmpty())
 			addSemanticAnnotation.setEnabled(false);
@@ -896,7 +1024,7 @@ public class ProfileFrame extends JFrame {
 		extend.setText(e == null ? "" : e.getProfileId());
 		ontologyList.setRowCount(0);
 		for (Ontology o : p.getOntology())
-			addOntologyRow(o);
+			addOntologyRow(o, true);
 		Component comp = p.getComponent();
 		inputs.setRowCount(0);
 		for (Port port : new ArrayList<>(comp.getInputPort()))
@@ -981,6 +1109,72 @@ public class ProfileFrame extends JFrame {
 				he.setReplacement(repl);
 			}
 			getExceptionHandling().getHandleException().add(he);
+		}
+	}
+
+	private ApplicationListener applistener = new AppListener();
+
+	public ApplicationListener getApplicationListener() {
+		return applistener;
+	}
+
+	public class AppListener implements ApplicationListener {
+		@Override
+		public void handleAbout(ApplicationEvent event) {
+			event.setHandled(true);
+			showMessageDialog(
+					ProfileFrame.this,
+					"<html>Taverna Component Profile Editor, "
+							+ System.getProperty("app.version")
+							+ "<p>Copyright \u00a9 "
+							+ System.getProperty("app.year")
+							+ ", The University of Manchester.");
+		}
+
+		@Override
+		public void handleOpenApplication(ApplicationEvent event) {
+			// Ignore
+		}
+
+		@Override
+		public void handleOpenFile(ApplicationEvent event) {
+			event.setHandled(true);
+			if (isModified()) {
+				switch (confirmForSave("opening another profile")) {
+				case CANCEL_OPTION:
+					return;
+				case YES_OPTION:
+					if (!save())
+						return;
+				}
+			}
+			try {
+				loadFile(fileDialog.getSelectedFile());
+			} catch (Exception e) {
+				errorDialog(e, "Error in Opening");
+			}
+		}
+
+		@Override
+		public void handlePreferences(ApplicationEvent event) {
+			// Ignore
+		}
+
+		@Override
+		public void handlePrintFile(ApplicationEvent event) {
+			// Ignore
+		}
+
+		@Override
+		public void handleQuit(ApplicationEvent event) {
+			event.setHandled(true);
+			quitAction.actionPerformed(null);
+		}
+
+		@Override
+		public void handleReOpenApplication(ApplicationEvent event) {
+			event.setHandled(true);
+			setVisible(true);
 		}
 	}
 }

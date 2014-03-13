@@ -134,7 +134,7 @@ public class EditActivityDialog extends GridDialog {
 		}
 	}
 
-	protected EditActivityDialog(ProfileFrame parent, String title,
+	public EditActivityDialog(ProfileFrame parent, String title,
 			EditActivity callback, Activity activity) {
 		super(parent, title, true);
 		this.callback = callback;
